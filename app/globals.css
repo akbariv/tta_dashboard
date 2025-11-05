@@ -16,6 +16,10 @@
   }
 }
 
+.quick-actions svg { display:block }
+.quick-actions svg path { vector-effect: non-scaling-stroke }
+
+
 body {
   background: #f4f5f7;
   font-family: var(--font-inter);
