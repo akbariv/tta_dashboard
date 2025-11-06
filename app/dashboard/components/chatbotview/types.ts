@@ -8,12 +8,21 @@ export type Props = {
 
 export type ChatAction = { id: "submit" | "cancel"; label: string };
 
+export type ChatAttachment = {
+  id: string;
+  kind: "image";
+  name: string;
+  url: string;           
+  file?: File;           
+};
+
 export type ChatMsg = {
   id: string;
   role: "user" | "bot";
   text: string;
   time: string;
   actions?: ChatAction[];
+  attachments?: ChatAttachment[];
 };
 
 export type BotReply = string | { text: string; actions?: ChatAction[] };

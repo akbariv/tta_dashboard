@@ -1,8 +1,10 @@
+// chatbotview.tsx
 "use client";
 import * as React from "react";
 import ChatHeader from "./chatheader";
 import ChatBox from "./chatbox";
-import { Props, ChatMsg, ExternalDraft } from "./types";
+import HelpSection from "./helpsection";
+import { Props, ChatMsg, ExternalDraft, ChatAttachment } from "./types";
 import {
   nowTime,
   parseExternalForm,
@@ -10,17 +12,23 @@ import {
   validateDepartureDate,
 } from "./scripts";
 import { getReplies, INIT_PROMPT } from "./scriptedchat";
-import HelpSection from "./helpsection";
+
+const MAX_FILES = 3;
+const MAX_SIZE_MB = 5;
 
 export default function ChatbotView({
-  autoplay = true,
   onQuickAction,
-  showHelpSection = true, // dipertahankan untuk kompatibilitas, belum dipakai di layout ini
+  showHelpSection = true,
 }: Props) {
   const [messages, setMessages] = React.useState<ChatMsg[]>([]);
   const [input, setInput] = React.useState("");
   const [isTyping, setIsTyping] = React.useState(false);
   const [started, setStarted] = React.useState(false);
+  type ClaimStage = "idle" | "choose" | "details";
+  const [claimStage, setClaimStage] = React.useState<ClaimStage>("idle");
+  const [claimType, setClaimType] = React.useState<
+    "hotel" | "transportation" | "others" | null
+  >(null);
 
   const [awaitingExternalForm, setAwaitingExternalForm] = React.useState(false);
   const [awaitingConfirm, setAwaitingConfirm] = React.useState(false);
@@ -29,14 +37,16 @@ export default function ChatbotView({
 
   const bodyRef = React.useRef<HTMLDivElement>(null!);
 
-  // autoscroll
+  const [pendingAttachments, setPendingAttachments] = React.useState<
+    ChatAttachment[]
+  >([]);
+
   React.useEffect(() => {
     const el = bodyRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [messages, isTyping]);
+  }, [messages, isTyping, pendingAttachments.length]);
 
-  // util: push balasan bot
   const pushBotReplies = async (replies: (string | { text: string })[]) => {
     setIsTyping(true);
     for (let i = 0; i < replies.length; i++) {
@@ -80,10 +90,47 @@ export default function ChatbotView({
     await pushBotReplies([INIT_PROMPT]);
   };
 
-  // -------- actions (submit/cancel button) --------
+  const onPickFiles = (files: FileList | null) => {
+    if (!files) return;
+
+    const existing = pendingAttachments.length;
+    const slice = Array.from(files).slice(0, Math.max(0, MAX_FILES - existing));
+
+    const next: ChatAttachment[] = [];
+    for (const f of slice) {
+      if (!f.type.startsWith("image/")) continue;
+      if (f.size > MAX_SIZE_MB * 1024 * 1024) continue;
+      next.push({
+        id: crypto.randomUUID(),
+        kind: "image",
+        name: f.name,
+        url: URL.createObjectURL(f),
+        file: f,
+      });
+    }
+    if (next.length) setPendingAttachments((prev) => [...prev, ...next]);
+  };
+
+  const onRemoveAttachment = (id: string) => {
+    setPendingAttachments((prev) => {
+      const target = prev.find((p) => p.id === id);
+      if (target) URL.revokeObjectURL(target.url);
+      return prev.filter((p) => p.id !== id);
+    });
+  };
+  const showClaimTypePrompt = async () => {
+    await pushBotReplies([
+      "Please select the type of claim/reimbursement you wish to submit:\n▪︎ Hotel\n▪︎ Transportation\n▪︎ Others",
+    ]);
+  };
+  const showClaimDetailsPrompt = async () => {
+    await pushBotReplies([
+      "Please answer the question and upload supporting documents such as receipts, invoices, or purchase notes.\nNominal:\nDate:\nPurpose of Reimbursement:",
+    ]);
+  };
+
   const handleActionClick = async (action: "submit" | "cancel") => {
     setAwaitingConfirm(false);
-
     if (action === "cancel") {
       setLastExternalDraft(null);
       await pushBotReplies([
@@ -113,18 +160,66 @@ export default function ChatbotView({
     setLastExternalDraft(null);
   };
 
-  // -------- kirim chat --------
+  // ===== Send chat =====
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || isTyping) return;
+    if (!text && pendingAttachments.length === 0) return;
+    if (isTyping) return;
+    const attSnapshot = pendingAttachments.slice();
 
     setMessages((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), role: "user", text, time: nowTime() },
+      {
+        id: crypto.randomUUID(),
+        role: "user",
+        text: text || "",
+        time: nowTime(),
+        attachments: attSnapshot,
+      },
     ]);
     setInput("");
+    setPendingAttachments([]);
+    // ====== CLAIM & REIMBURSE SCRIPT ======
+    if (claimStage === "choose") {
+      const t = text.toLowerCase();
+      const picked = /hotel/.test(t)
+        ? "hotel"
+        : /transport/.test(t)
+        ? "transportation"
+        : /other|others/.test(t)
+        ? "others"
+        : null;
 
-    // konfirmasi via teks
+      if (picked) {
+        setClaimType(picked as any);
+        setClaimStage("details");
+        await showClaimDetailsPrompt();
+        return;
+      } else {
+        await showClaimTypePrompt();
+        return;
+      }
+    }
+
+    if (claimStage === "details") {
+      if (attSnapshot.length === 0) {
+        await pushBotReplies([
+          "Please upload document according to your reimbursement purpose such as receipt, bills, etc.",
+        ]);
+        return;
+      }
+
+      await pushBotReplies([
+        "Your submission has been sent ✅\nCurrent status: Awaiting approval from the Head of Department.\n\nYou will receive a notification once this claim has been approved or rejected.",
+      ]);
+
+      setClaimStage("idle");
+      setClaimType(null);
+      return;
+    }
+
+    // ====== END CLAIM SCRIPT ======
+
     if (awaitingConfirm) {
       const t = text.toLowerCase();
       if (t === "submit" || t === "cancel") {
@@ -146,17 +241,17 @@ export default function ChatbotView({
           `Departure Date? ${parsed.date}\n` +
           `Transportation? ${parsed.transport}\n` +
           `Estimated Cost? ${parsed.cost}`;
-
         await pushBotWithActions(reviewText);
         return;
       }
-      await pushBotReplies([
-        "Please provide details like:\nDestination: <city>\nDeparture Date: <date>\nTransportation: <type>\nEstimated Cost: <amount>",
-      ]);
+      if (text) {
+        await pushBotReplies([
+          "Please provide details like:\nDestination: <city>\nDeparture Date: <date>\nTransportation: <type>\nEstimated Cost: <amount>",
+        ]);
+      }
       return;
     }
 
-    // balasan scripted
     const replies = getReplies(text);
     setIsTyping(true);
     for (let i = 0; i < replies.length; i++) {
@@ -182,31 +277,31 @@ export default function ChatbotView({
     }
   };
 
-  // -------- quick actions --------
   const handleQuickAction = async (title: string) => {
     onQuickAction?.(title);
     if (title === "Submit Travel Request") await ensureInitPrompt();
+    if (title === "Claim & Reimburse") {
+      setClaimStage("choose");
+      setClaimType(null);
+      await showClaimTypePrompt();
+    }
   };
 
   return (
     <>
-      {/* Title */}
-      <div className="mb-8">
+      {/* Header + “AI Powered” dibiarkan seperti sebelumnya */}
+      <div className="mb-8 flex flex-col items-start">
         <h1 className="text-[32px] text-[#202224] tracking-[-0.114px] mb-2 font-semibold">
           AI Assistant
         </h1>
-
-        {/* subtitle + badge di satu baris */}
-        <div className="flex items-center gap-3 w-full flex-wrap">
+        <div className="flex items-center justify-between w-full max-w-[980px]">
           <p className="text-[16px] text-black tracking-[-0.114px]">
             Get instant help with TTA questions and tasks
           </p>
-
-          {/* badge dorong ke kanan */}
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#dcfce7] rounded-lg ml-auto">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#dcfce7] rounded-lg">
             <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
               <path
-                d="M2 7c-.094.0003-.187-.0262-.267-.0765-.08-.0503-.144-.1223-.185-.2076-.041-.0854-.057-.1806-.046-.2746.011-.094.049-.1829.108-.2563L6.56 1.085c.037-.043.087-.072.143-.082.056-.01.114 0 .164.027.05.027.09.07.112.122.022.052.026.11.011.165L6.03 4.325c-.028.076-.038.157-.028.237.01.08.039.156.085.223.046.067.108.121.18.158.072.037.152.056.233.056H10c.095-.0003.188.0262.268.0765.08.0502.144.1222.185.2076.041.0853.057.1806.046.2746-.011.094-.049.1829-.108.2563L5.44 10.915c-.037.043-.087.072-.143.082-.056.01-.114 0-.164-.027-.05-.027-.09-.07-.112-.122-.022-.052-.026-.11-.011-.165l.96-3.01c.028-.076.038-.157.028-.237-.01-.08-.039-.156-.085-.223-.046-.067-.108-.121-.18-.158C5.12 7.01 5.04 6.99 4.96 6.99H2Z"
+                d="M2 7c-.094.0003-.187-.0262-.267-.0765-.08-.0503-.144-.1223-.185-.2076-.041-.0854-.057-.1806-.046-.2746.011-.094.049-.1829.108-.2563L6.56 1.085..."
                 stroke="#016630"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -217,11 +312,14 @@ export default function ChatbotView({
         </div>
       </div>
 
-      {/* Grid: kiri Quick Actions, kanan Chat */}
-      <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-6 mb-8">
+      {/* Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-[331px_minmax(0,1fr)] gap-6 mb-8">
         {/* Quick Actions */}
         <div className="w-full lg:w-[331px] bg-gradient-to-br from-white to-white/50 rounded-[14px] shadow-lg p-6">
+          {/* ... (tetap) map qaItems dengan onClick={handleQuickAction} */}
+          {/* isi Quick Actions tetap seperti sebelumnya */}
           <div className="flex items-center gap-2 mb-8">
+            {/* title */}
             <svg
               width="20"
               height="20"
@@ -230,21 +328,7 @@ export default function ChatbotView({
               aria-hidden
             >
               <path
-                d="M12.5 11.6667C12.6667 10.8334 13.0833 10.2501 13.75 9.58341C14.5833 8.83341 15 7.75008 15 6.66675C15 5.34067 14.4732 4.0689 13.5355 3.13121C12.5979 2.19353 11.3261 1.66675 10 1.66675C8.67392 1.66675 7.40215 2.19353 6.46447 3.13121C5.52678 4.0689 5 5.34067 5 6.66675C5 7.50008 5.16667 8.50008 6.25 9.58341C6.83333 10.1667 7.33333 10.8334 7.5 11.6667"
-                stroke="#0A0A0A"
-                strokeWidth="1.66667"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M7.5 15H12.5"
-                stroke="#0A0A0A"
-                strokeWidth="1.66667"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M8.33334 18.3333H11.6667"
+                d="M12.5 11.6667..."
                 stroke="#0A0A0A"
                 strokeWidth="1.66667"
                 strokeLinecap="round"
@@ -255,7 +339,6 @@ export default function ChatbotView({
               Quick Actions
             </span>
           </div>
-
           <div className="flex flex-col gap-3">
             {qaItems.map((it) => (
               <button
@@ -280,7 +363,7 @@ export default function ChatbotView({
         </div>
 
         {/* Chat */}
-        <div className="flex flex-col bg-white rounded-[14px] shadow-lg h-[640px] lg:h-[680px]">
+        <div className="flex flex-col bg-white rounded-[14px] shadow-lg h-[680px] min-w-0 overflow-hidden">
           <ChatHeader />
           <ChatBox
             messages={messages}
@@ -290,14 +373,14 @@ export default function ChatbotView({
             onChangeInput={setInput}
             onSend={handleSend}
             scrollRef={bodyRef}
+            pendingAttachments={pendingAttachments}
+            onPickFiles={onPickFiles}
+            onRemoveAttachment={onRemoveAttachment}
           />
         </div>
       </div>
-      {showHelpSection && (
-        <div className="mt-10 lg:mt-12">
-          <HelpSection />
-        </div>
-      )}
+      <div className="mt-6" />
+      {showHelpSection && <HelpSection />}
     </>
   );
 }
