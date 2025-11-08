@@ -2,6 +2,7 @@
 "use client";
 import * as React from "react";
 import { ChatAction, ChatMsg, ChatAttachment } from "./types";
+import cleaBubble from "./messagebubble";
 import MessageBubble from "./messagebubble";
 
 type DivRef =
