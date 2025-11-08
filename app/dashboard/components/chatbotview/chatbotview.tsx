@@ -15,6 +15,12 @@ import { getReplies, INIT_PROMPT } from "./scriptedchat";
 
 const MAX_FILES = 3;
 const MAX_SIZE_MB = 5;
+const MAIN_MENU_GREETING =
+  "Hello, I am TTA assistant ready to help you with travel request, booking changes, reimbursements, and budget updates. What would you like to do today?";
+
+async function delay(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 export default function ChatbotView({
   onQuickAction,
@@ -40,6 +46,20 @@ export default function ChatbotView({
   const [pendingAttachments, setPendingAttachments] = React.useState<
     ChatAttachment[]
   >([]);
+
+const askMainMenu = async (delayMs = 0) => {
+  if (delayMs > 0) await delay(delayMs);
+  await pushBotReplies([MAIN_MENU_GREETING]);
+
+  // reset state
+  setClaimStage("idle");
+  setClaimType(null);
+  setAwaitingExternalForm(false);
+  setAwaitingConfirm(false);
+  setLastExternalDraft(null);
+  setStarted(false);
+};
+
 
   React.useEffect(() => {
     const el = bodyRef.current;
@@ -136,6 +156,7 @@ export default function ChatbotView({
       await pushBotReplies([
         "Request cancelled. You can start again by typing “internal” or “external”.",
       ]);
+      await askMainMenu(3000);
       return;
     }
 
@@ -158,6 +179,7 @@ export default function ChatbotView({
 
     await pushBotReplies([`Status: Submitted | Departure Date: ${v.iso} ✓`]);
     setLastExternalDraft(null);
+    await askMainMenu(3000);
   };
 
   // ===== Send chat =====
@@ -165,8 +187,11 @@ export default function ChatbotView({
     const text = input.trim();
     if (!text && pendingAttachments.length === 0) return;
     if (isTyping) return;
-    const attSnapshot = pendingAttachments.slice();
 
+    const attSnapshot = pendingAttachments.slice();
+    const t = text.toLowerCase();
+
+    // 1) SELALU push bubble user lebih dulu
     setMessages((prev) => [
       ...prev,
       {
@@ -179,9 +204,47 @@ export default function ChatbotView({
     ]);
     setInput("");
     setPendingAttachments([]);
-    // ====== CLAIM & REIMBURSE SCRIPT ======
+
+    // 2) Intent global
+    if (/\b(menu|restart|start over|help)\b/.test(t)) {
+      await askMainMenu(0);
+      return;
+    }
+
+    // 3) Flow Claim/Reimburse (intent awal)
+    if (
+      /\b(reimburse|reimbursement|claim|klaim)\b/.test(t) &&
+      claimStage === "idle"
+    ) {
+      setClaimStage("choose");
+      setClaimType(null);
+      await showClaimTypePrompt();
+      return;
+    }
+
+    // 4) Flow Travel Request (intent awal)
+    if (
+      /\b(travel request|submit travel|pengajuan perjalanan|perjalanan dinas)\b/.test(
+        t
+      )
+    ) {
+      await ensureInitPrompt();
+      return;
+    }
+
+    // 5) Booking changes (belum tersedia)
+    if (
+      /\b(booking change|booking changes|ubah booking|reschedule)\b/.test(t)
+    ) {
+      await pushBotReplies([
+        "Booking changes flow is not implemented in this prototype yet.",
+      ]);
+      await askMainMenu(0);
+      return;
+    }
+
+    // 6) CLAIM: tahap pilih tipe
     if (claimStage === "choose") {
-      const t = text.toLowerCase();
       const picked = /hotel/.test(t)
         ? "hotel"
         : /transport/.test(t)
@@ -194,13 +257,13 @@ export default function ChatbotView({
         setClaimType(picked as any);
         setClaimStage("details");
         await showClaimDetailsPrompt();
-        return;
       } else {
         await showClaimTypePrompt();
-        return;
       }
+      return;
     }
 
+    // 7) CLAIM: tahap isi detail + validasi lampiran
     if (claimStage === "details") {
       if (attSnapshot.length === 0) {
         await pushBotReplies([
@@ -212,30 +275,27 @@ export default function ChatbotView({
       await pushBotReplies([
         "Your submission has been sent ✅\nCurrent status: Awaiting approval from the Head of Department.\n\nYou will receive a notification once this claim has been approved or rejected.",
       ]);
-
       setClaimStage("idle");
       setClaimType(null);
+      await askMainMenu(3000);
       return;
     }
 
-    // ====== END CLAIM SCRIPT ======
-
+    // 8) External form confirm
     if (awaitingConfirm) {
-      const t = text.toLowerCase();
       if (t === "submit" || t === "cancel") {
         await handleActionClick(t as "submit" | "cancel");
         return;
       }
     }
 
-    // mode isi form external
+    // 9) External form parsing
     if (awaitingExternalForm) {
       const parsed = parseExternalForm(text);
       if (parsed) {
         setAwaitingExternalForm(false);
         setAwaitingConfirm(true);
         setLastExternalDraft(parsed);
-
         const reviewText =
           `Destination? ${parsed.destination}\n` +
           `Departure Date? ${parsed.date}\n` +
@@ -244,14 +304,13 @@ export default function ChatbotView({
         await pushBotWithActions(reviewText);
         return;
       }
-      if (text) {
-        await pushBotReplies([
-          "Please provide details like:\nDestination: <city>\nDeparture Date: <date>\nTransportation: <type>\nEstimated Cost: <amount>",
-        ]);
-      }
+      await pushBotReplies([
+        "Please provide details like:\nDestination: <city>\nDeparture Date: <date>\nTransportation: <type>\nEstimated Cost: <amount>",
+      ]);
       return;
     }
 
+    // 10) Scripted reply default
     const replies = getReplies(text);
     setIsTyping(true);
     for (let i = 0; i < replies.length; i++) {
