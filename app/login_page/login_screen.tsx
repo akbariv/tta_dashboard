@@ -11,13 +11,34 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const ROLE_REDIRECT: Record<string, string> = {
-    admin: "/dashboard",
-    user: "/dashboard",
-    guest: "/dashboard",
-  };
+  // const ROLE_REDIRECT: Record<string, string> = {
+  //   admin: "/dashboard",
+  //   user: "/dashboard",
+  //   guest: "/dashboard",
+  // };
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+// function normalizeRole(role?: string) {
+//   return (role ?? 'karyawan').trim().toLowerCase().replace(/\s+/g, '_');
+// }
+
+// function roleToRoute(role?: string) {
+//   switch (normalizeRole(role)) {
+//     case 'staff_tta':
+//       return '/dashboard/staff-tta';
+//     case 'hod':
+//     case 'head_department':
+//     case 'head_of_department':
+//       return '/dashboard/head-department';
+//     case 'management_team':
+//       return '/dashboard/management-team';
+//     case 'karyawan':
+//     default:
+//       return '/dashboard/karyawan';
+//   }
+// }
+
+
+async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setLoading(true);
@@ -28,16 +49,14 @@ export default function LoginPage() {
         return;
       }
 
-      // Demo only: simpan sesi sederhana di browser
       localStorage.setItem("authUser", JSON.stringify(user));
 
-      const dest =
-        ROLE_REDIRECT[user.role ?? "user"] ?? "/dashboard"; // fallback
-      router.push(dest);
+      router.push("/dashboard");
     } finally {
       setLoading(false);
     }
   }
+
 
   return (
     <main className="bg-[#f4f5f7] relative">

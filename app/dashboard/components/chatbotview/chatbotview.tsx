@@ -18,9 +18,24 @@ const MAX_SIZE_MB = 5;
 const MAIN_MENU_GREETING =
   "Hello, I am TTA assistant ready to help you with travel request, booking changes, reimbursements, and budget updates. What would you like to do today?";
 
+const INITIAL_BUDGET = 10_000_000;
+
+const formatRupiah = (n: number) => "Rp " + n.toLocaleString("id-ID");
+
 async function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
+
+const parseMoney = (s?: string) => {
+  if (!s) return 0;
+  const m =
+    s.match(
+      /(?:nominal|amount|cost|biaya|estimated\s*cost)?[^0-9]*(\d[\d.,]*)/i
+    ) || s.match(/(\d[\d.,]+)/);
+  if (!m) return 0;
+  const cleaned = m[1].replace(/[^\d]/g, "");
+  return parseInt(cleaned || "0", 10) || 0;
+};
 
 export default function ChatbotView({
   onQuickAction,
@@ -46,20 +61,20 @@ export default function ChatbotView({
   const [pendingAttachments, setPendingAttachments] = React.useState<
     ChatAttachment[]
   >([]);
+  const [budgetUsed, setBudgetUsed] = React.useState(0);
 
-const askMainMenu = async (delayMs = 0) => {
-  if (delayMs > 0) await delay(delayMs);
-  await pushBotReplies([MAIN_MENU_GREETING]);
+  const askMainMenu = async (delayMs = 0) => {
+    if (delayMs > 0) await delay(delayMs);
+    await pushBotReplies([MAIN_MENU_GREETING]);
 
-  // reset state
-  setClaimStage("idle");
-  setClaimType(null);
-  setAwaitingExternalForm(false);
-  setAwaitingConfirm(false);
-  setLastExternalDraft(null);
-  setStarted(false);
-};
-
+    // reset state
+    setClaimStage("idle");
+    setClaimType(null);
+    setAwaitingExternalForm(false);
+    setAwaitingConfirm(false);
+    setLastExternalDraft(null);
+    setStarted(false);
+  };
 
   React.useEffect(() => {
     const el = bodyRef.current;
@@ -131,6 +146,16 @@ const askMainMenu = async (delayMs = 0) => {
     if (next.length) setPendingAttachments((prev) => [...prev, ...next]);
   };
 
+  const showBudgetSummary = async () => {
+    const remaining = Math.max(0, INITIAL_BUDGET - budgetUsed);
+    await pushBotReplies([
+      `Based on your current travel budget:\n` +
+        `• Initial Budget: ${formatRupiah(INITIAL_BUDGET)}\n` +
+        `• Used Budget: ${formatRupiah(budgetUsed)}\n` +
+        `• Remaining Budget: ${formatRupiah(remaining)}`,
+    ]);
+  };
+
   const onRemoveAttachment = (id: string) => {
     setPendingAttachments((prev) => {
       const target = prev.find((p) => p.id === id);
@@ -178,6 +203,10 @@ const askMainMenu = async (delayMs = 0) => {
     }
 
     await pushBotReplies([`Status: Submitted | Departure Date: ${v.iso} ✓`]);
+    const addCost = parseMoney(lastExternalDraft?.cost);
+    if (addCost > 0)
+      setBudgetUsed((u) => Math.min(INITIAL_BUDGET, u + addCost));
+
     setLastExternalDraft(null);
     await askMainMenu(3000);
   };
@@ -271,6 +300,9 @@ const askMainMenu = async (delayMs = 0) => {
         ]);
         return;
       }
+      const addNominal = parseMoney(text);
+      if (addNominal > 0)
+        setBudgetUsed((u) => Math.min(INITIAL_BUDGET, u + addNominal));
 
       await pushBotReplies([
         "Your submission has been sent ✅\nCurrent status: Awaiting approval from the Head of Department.\n\nYou will receive a notification once this claim has been approved or rejected.",
@@ -334,6 +366,11 @@ const askMainMenu = async (delayMs = 0) => {
     if (/\b(external|eksternal)\b/i.test(text) && !awaitingExternalForm) {
       setAwaitingExternalForm(true);
     }
+
+    if (/\b(budget|view budget|budget summary|summary)\b/.test(t)) {
+      await showBudgetSummary();
+      return;
+    }
   };
 
   const handleQuickAction = async (title: string) => {
@@ -343,6 +380,10 @@ const askMainMenu = async (delayMs = 0) => {
       setClaimStage("choose");
       setClaimType(null);
       await showClaimTypePrompt();
+    }
+    if (title === "View Budget Summary") {
+      await showBudgetSummary();
+      return;
     }
   };
 

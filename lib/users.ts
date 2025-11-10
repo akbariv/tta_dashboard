@@ -6,9 +6,10 @@ export type User = {
 };
 
 export const USERS: User[] = [
-  { username: "admin", password: "admin123", name: "Administrator", role: "admin" },
-  { username: "user1", password: "password1", name: "User One", role: "user" },
-  { username: "guest", password: "guest", name: "Guest User", role: "guest" },
+  { username: 'staff_TTA', password: 'staffTTA123', name: 'Staff TTA', role: 'staff_tta' },
+  { username: 'karyawan',  password: 'karyawan123', name: 'Karyawan',  role: 'karyawan' },
+  { username: 'Hod',       password: 'hod123',      name: 'Head of Department', role: 'hod' },
+  // { username: "Hod", password: "hod123", name: "Head of Department", role: "hod" },
 ];
 
 /**
