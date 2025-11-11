@@ -11,31 +11,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  // const ROLE_REDIRECT: Record<string, string> = {
-  //   admin: "/dashboard",
-  //   user: "/dashboard",
-  //   guest: "/dashboard",
-  // };
-
-// function normalizeRole(role?: string) {
-//   return (role ?? 'karyawan').trim().toLowerCase().replace(/\s+/g, '_');
-// }
-
-// function roleToRoute(role?: string) {
-//   switch (normalizeRole(role)) {
-//     case 'staff_tta':
-//       return '/dashboard/staff-tta';
-//     case 'hod':
-//     case 'head_department':
-//     case 'head_of_department':
-//       return '/dashboard/head-department';
-//     case 'management_team':
-//       return '/dashboard/management-team';
-//     case 'karyawan':
-//     default:
-//       return '/dashboard/karyawan';
-//   }
-// }
 
 
 async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
