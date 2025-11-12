@@ -17,11 +17,15 @@ export default function DashboardPage() {
   const pathname = usePathname();
 
   // user & auth redirect
-  const [user, setUser] = useState<{ username: string; name: string; role?: string } | null>(null);
+  const [user, setUser] = useState<{
+    username: string;
+    name: string;
+    role?: string;
+  } | null>(null);
 
   // sinkron dengan query ?section=
   const sectionParam = (searchParams.get("section") as Section) ?? "dashboard";
-  const openIdParam = searchParams.get("id");
+  const openIdParam = searchParams.get("id") ?? searchParams.get("openId");
 
   const [activeMenu, setActiveMenu] = useState<Section>("dashboard");
   const [search, setSearch] = useState("");
@@ -64,7 +68,9 @@ export default function DashboardPage() {
         else params.set(k, v);
       });
     }
-    router.push(params.toString() ? `${pathname}?${params.toString()}` : pathname);
+    router.push(
+      params.toString() ? `${pathname}?${params.toString()}` : pathname
+    );
   }
 
   function logout() {
@@ -80,7 +86,9 @@ export default function DashboardPage() {
     <div className="size-full flex bg-[#f5f6fa] min-h-screen">
       <Sidebar
         activeMenu={activeMenu}
-        onMenuClick={(m) => (m === "logout" ? logout() : goToSection(m as Section))}
+        onMenuClick={(m) =>
+          m === "logout" ? logout() : goToSection(m as Section)
+        }
       />
 
       <div className="flex-1 flex flex-col">
@@ -95,17 +103,28 @@ export default function DashboardPage() {
 
         <div className="flex-1 px-8 py-6">
           {/* Controller section berbasis query param */}
-          {activeMenu === "dashboard" && <DashboardController role={user.role} />}
+          {activeMenu === "dashboard" && (
+            <DashboardController role={user.role} />
+          )}
 
           {activeMenu === "chatbot" && <ChatbotView autoplay />}
 
           {/* Kirim id (jika ada) supaya langsung buka detail */}
-          {activeMenu === "approval" && <ApprovalView initialOpenId={openIdParam ?? null} />}
+          {activeMenu === "approval" && (
+            <ApprovalView
+              initialOpenId={openIdParam ?? null}
+              onCloseDetail={() => goToSection("approval", { id: null })} 
+            />
+          )}
 
           {activeMenu === "settings" && (
             <div className="text-center py-20">
-              <h2 className="text-2xl font-semibold text-gray-600">Settings View</h2>
-              <p className="text-gray-500 mt-2">Settings content coming soon...</p>
+              <h2 className="text-2xl font-semibold text-gray-600">
+                Settings View
+              </h2>
+              <p className="text-gray-500 mt-2">
+                Settings content coming soon...
+              </p>
             </div>
           )}
         </div>

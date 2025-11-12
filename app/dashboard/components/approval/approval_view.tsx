@@ -3,38 +3,42 @@
 
 import * as React from "react";
 import { Card, SearchInput } from "@/app/dashboard/components/common";
-import { approvalManagement as APPROVAL_SRC } from "@/app/dashboard/data/ttaMock";
+import {
+  approvalManagement as APPROVAL_SRC,
+  loadDecisionStore,
+  persistDecision,         // <— pakai dari ttaMock
+} from "@/app/dashboard/data/ttaMock";
 import ApprovalDetailView from "@/app/dashboard/components/approval/approval_detail_view";
 
-/* --- pill khusus untuk list (UI sama) --- */
-export function CountDownPill({
-  targetISO,
-  badge,
-}: {
-  targetISO: string;
-  badge?: string;
-}) {
-  if (badge)
-    return (
-      <span className="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-700">
-        {badge}
-      </span>
-    );
+/* ---------------- Persist helpers (localStorage) ---------------- */
+// type DecisionStatus = "Approved" | "Rejected";
+// type DecisionStore = Record<string, { status: DecisionStatus; decisionDateISO: string; reason?: string }>;
+
+// const STORAGE_KEY = "tta_approval_decisions_v1";
+
+// function loadDecisionStore(): DecisionStore {
+//   if (typeof window === "undefined") return {};
+//   try {
+//     return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
+//   } catch {
+//     return {};
+//   }
+// }
+
+// function persistDecision(id: string, status: DecisionStatus, reason?: string) {
+//   const store = loadDecisionStore();
+//   store[id] = { status, decisionDateISO: new Date().toISOString(), reason };
+//   localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+// }
+
+export function CountDownPill({ targetISO, badge }: { targetISO: string; badge?: string }) {
+  if (badge) return <span className="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-700">{badge}</span>;
   const target = new Date(targetISO).getTime();
   const diff = target - Date.now();
   const hours = Math.ceil(diff / 3_600_000);
   const days = Math.ceil(diff / 86_400_000);
-  const label =
-    hours <= 24
-      ? "24 hours left"
-      : days === 1
-      ? "1 day left"
-      : `${days} days left`;
-  return (
-    <span className="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-700">
-      {label}
-    </span>
-  );
+  const label = hours <= 24 ? "24 hours left" : days === 1 ? "1 day left" : `${days} days left`;
+  return <span className="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-700">{label}</span>;
 }
 
 /* --- tipe Row list --- */
@@ -68,21 +72,31 @@ function mapToRows(): Row[] {
     };
   });
 }
-const sortByDeadlineAsc = (
-  a: { countdownISO: string },
-  b: { countdownISO: string }
-) => new Date(a.countdownISO).getTime() - new Date(b.countdownISO).getTime();
+
+const sortByDeadlineAsc = (a: { countdownISO: string }, b: { countdownISO: string }) =>
+  new Date(a.countdownISO).getTime() - new Date(b.countdownISO).getTime();
 
 export default function ApprovalView({
   initialOpenId = null,
+  onCloseDetail,                 
 }: {
   initialOpenId?: string | null;
+  onCloseDetail?: () => void;    
 }) {
-  const [data, setData] = React.useState<Row[]>(() => mapToRows());
+  const [data, setData] = React.useState<Row[]>([]);
   const [status, setStatus] = React.useState<"All" | Row["status"]>("All");
   const [search, setSearch] = React.useState("");
   const [openId, setOpenId] = React.useState<string | null>(initialOpenId);
   React.useEffect(() => setOpenId(initialOpenId ?? null), [initialOpenId]);
+
+  // ---------- INIT: load sumber + apply persist (filter yg sudah diputus) ----------
+ React.useEffect(() => {
+  const decided = loadDecisionStore();
+  const base = mapToRows();
+  const pendingOnly = base.filter((r) => !decided[r.id]); 
+  setData(pendingOnly);
+}, []);
+
 
   const rows = React.useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -90,32 +104,35 @@ export default function ApprovalView({
       .filter((r) => {
         const passStatus = status === "All" ? true : r.status === status;
         const passSearch =
-          q.length === 0 ||
-          [r.id, r.category, r.requestor, r.department]
-            .join(" ")
-            .toLowerCase()
-            .includes(q);
+          q.length === 0 || [r.id, r.category, r.requestor, r.department].join(" ").toLowerCase().includes(q);
         return passStatus && passSearch;
       })
       .sort(sortByDeadlineAsc);
   }, [data, status, search]);
 
-  const selected = React.useMemo(
-    () => data.find((x) => x.id === openId) ?? null,
-    [data, openId]
-  );
+  const selected = React.useMemo(() => data.find((x) => x.id === openId) ?? null, [data, openId]);
 
-  const onApprove = (id: string) =>
-    setData((prev) => prev.filter((r) => r.id !== id));
-  const onReject = (id: string) =>
-    setData((prev) => prev.filter((r) => r.id !== id));
+  // ---------- DECIDE from LIST or from DETAIL (via onClose in detail view) ----------
+ const onApprove = (id: string) => {
+  setData((prev) => prev.filter((r) => r.id !== id));
+  persistDecision(id, { status: "Approved", decisionDateISO: new Date().toISOString() });
+};
+const onReject = (id: string) => {
+  setData((prev) => prev.filter((r) => r.id !== id));
+  // kalau nanti bawa reason, tinggal persistDecision(id, { status: "Rejected", decisionDateISO: new Date().toISOString(), reason })
+  persistDecision(id, { status: "Rejected", decisionDateISO: new Date().toISOString() });
+};
 
-  /* ---------- TAMPILAN DETAIL (full page) ---------- */
+
+  /* ---------- TAMPILAN DETAIL ---------- */
   if (selected) {
     return (
       <ApprovalDetailView
         row={selected}
-        onClose={() => setOpenId(null)}
+        onClose={() => {
+          setOpenId(null);
+          onCloseDetail?.();      // ← panggil callback untuk hapus ?id di URL
+        }}
         onApprove={onApprove}
         onReject={onReject}
       />
@@ -125,9 +142,7 @@ export default function ApprovalView({
   /* ---------- TAMPILAN LIST ---------- */
   return (
     <div className="space-y-4">
-      <h1 className="text-[28px] font-semibold text-[#202224]">
-        Approval Detail
-      </h1>
+      <h1 className="text-[28px] font-semibold text-[#202224]">Approval Detail</h1>
 
       <Card
         title={
@@ -143,22 +158,13 @@ export default function ApprovalView({
             <select className="px-3 py-2 text-sm border rounded-lg">
               <option>Period</option>
             </select>
-            <select
-              className="px-3 py-2 text-sm border rounded-lg"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as any)}
-            >
+            <select className="px-3 py-2 text-sm border rounded-lg" value={status} onChange={(e) => setStatus(e.target.value as any)}>
               <option value="All">Status</option>
               <option value="Pending">Pending</option>
               <option value="Approved">Approved</option>
               <option value="Rejected">Rejected</option>
             </select>
-            <SearchInput
-              placeholder="Search"
-              size="sm"
-              value={search}
-              onChange={setSearch}
-            />
+            <SearchInput placeholder="Search" size="sm" value={search} onChange={setSearch} />
           </div>
         }
       >
@@ -183,10 +189,7 @@ export default function ApprovalView({
                   <td className="py-3">{r.requestor}</td>
                   <td className="py-3">{r.department}</td>
                   <td className="py-3">
-                    <CountDownPill
-                      targetISO={r.countdownISO}
-                      badge={r.countdownBadge}
-                    />
+                    <CountDownPill targetISO={r.countdownISO} badge={r.countdownBadge} />
                   </td>
                   <td className="py-3">
                     <span
@@ -204,22 +207,13 @@ export default function ApprovalView({
                   </td>
                   <td className="py-2">
                     <div className="flex w-full items-center justify-end gap-2 pr-4">
-                      <button
-                        onClick={() => setOpenId(r.id)}
-                        className="px-3 py-1 text-xs rounded bg-[#bdd5fd] text-[#1755b9] hover:bg-[#e0e4ec]"
-                      >
+                      <button onClick={() => setOpenId(r.id)} className="px-3 py-1 text-xs rounded bg-[#bdd5fd] text-[#1755b9] hover:bg-[#e0e4ec]">
                         Detail
                       </button>
-                      <button
-                        onClick={() => onApprove(r.id)}
-                        className="px-3 py-1 text-xs rounded bg-[#3B82F6] text-white hover:bg-[#2563EB]"
-                      >
+                      <button onClick={() => onApprove(r.id)} className="px-3 py-1 text-xs rounded bg-[#3B82F6] text-white hover:bg-[#2563EB]">
                         Approve
                       </button>
-                      <button
-                        onClick={() => onReject(r.id)}
-                        className="px-3 py-1 text-xs rounded bg-rose-100 text-rose-700 hover:bg-rose-200"
-                      >
+                      <button onClick={() => onReject(r.id)} className="px-3 py-1 text-xs rounded bg-rose-100 text-rose-700 hover:bg-rose-200">
                         Reject
                       </button>
                     </div>

@@ -24,6 +24,12 @@ import {
   getApprovalTrend,
   getSla,
   getActiveTripStacked,
+  approvalManagement as APPROVAL_SRC,
+  getPendingApprovals,
+  countByCategory,
+  approvalDetailById,
+  loadDecisionStore,
+  type ApprovalDetail,
   type Department,
   type PeriodKey,
 } from "@/app/dashboard/data/ttaMock";
@@ -295,6 +301,75 @@ function GroupedBarChart({
   );
 }
 
+// ======= APPROVAL HISTORY (ambil dari persist + join ke detail) =======
+const approvalHistoryRows = (() => {
+  const store = loadDecisionStore();
+  return Object.entries(store)
+    .map(([id, rec]) => {
+      const d = (
+        approvalDetailById as Record<string, ApprovalDetail | undefined>
+      )[id];
+      const base = APPROVAL_SRC.find((x) => x.id === id);
+      const category =
+        base?.category ??
+        (d?.kind === "travel"
+          ? "Travel Request"
+          : d?.kind === "claim"
+          ? "Claim Request"
+          : "-");
+      return {
+        id,
+        category,
+        requestor: d?.employee.name ?? base?.requestor ?? "-",
+        department: d?.employee.department ?? base?.department ?? "-",
+        requestDateISO: d?.approval.requestDateISO ?? new Date().toISOString(),
+        approvalDateISO: rec.decisionDateISO,
+        status: rec.status as "Approved" | "Rejected",
+      };
+    })
+    .sort(
+      (a, b) =>
+        new Date(b.approvalDateISO).getTime() -
+        new Date(a.approvalDateISO).getTime()
+    );
+})();
+
+// const approvalHistoryRows = React.useMemo(() => {
+//   const store = loadDecisionStore();
+//   const entries = Object.entries(store);
+
+//   return entries
+//     .map(([id, rec]) => {
+//       const d = (
+//         approvalDetailById as Record<string, ApprovalDetail | undefined>
+//       )[id];
+//       const base = APPROVAL_SRC.find((x) => x.id === id);
+
+//       const category =
+//         base?.category ??
+//         (d?.kind === "travel"
+//           ? "Travel Request"
+//           : d?.kind === "claim"
+//           ? "Claim Request"
+//           : "-");
+
+//       return {
+//         id,
+//         category,
+//         requestor: d?.employee.name ?? base?.requestor ?? "-",
+//         department: d?.employee.department ?? base?.department ?? "-",
+//         requestDateISO: d?.approval.requestDateISO ?? new Date().toISOString(),
+//         approvalDateISO: rec.decisionDateISO, // dari persist
+//         status: rec.status as "Approved" | "Rejected",
+//       };
+//     })
+//     .sort(
+//       (a, b) =>
+//         new Date(b.approvalDateISO).getTime() -
+//         new Date(a.approvalDateISO).getTime()
+//     );
+// }, []);
+
 /* ================== PAGE ================== */
 export default function DashboardHOD() {
   // Filter dropdowns
@@ -320,31 +395,43 @@ export default function DashboardHOD() {
 
   /* ======= DATA DARI MOCK ======= */
   // Approval cards
+  // Approval cards (DINAMIS dari persist)
+  const travelSum = React.useMemo(
+    () => countByCategory("Travel Request", APPROVAL_SRC),
+    []
+  );
+  const claimSum = React.useMemo(
+    () => countByCategory("Claim Request", APPROVAL_SRC),
+    []
+  );
   const approvalTravel = MOCK.approval.cards.travelRequest;
   const approvalClaim = MOCK.approval.cards.claim;
   const approvalBooking = MOCK.approval.cards.booking;
 
   // Approval management table
-  const approvalMgmtRows = MOCK.approval.managementRows
-    .map((r: any) => {
-      const now = Date.now();
-      const countdownISO = r.dueInHours
-        ? new Date(now + r.dueInHours * 3600_000).toISOString()
-        : r.dueInDays
-        ? new Date(now + r.dueInDays * 86400_000).toISOString()
-        : new Date(now + 24 * 3600_000).toISOString();
+  const approvalMgmtRows = React.useMemo(() => {
+    const src = getPendingApprovals(APPROVAL_SRC);
+    const now = Date.now();
+    return src
+      .map((r: any) => {
+        const countdownISO = r.dueInHours
+          ? new Date(now + r.dueInHours * 3_600_000).toISOString()
+          : r.dueInDays
+          ? new Date(now + r.dueInDays * 86_400_000).toISOString()
+          : new Date(now + 24 * 3_600_000).toISOString();
 
-      return {
-        id: r.id,
-        bookingId: r.bookingId ?? "-",
-        category: r.category,
-        requestor: r.requestor,
-        department: r.department,
-        countdownISO,
-      };
-    })
-    .sort(sortByDeadlineAsc) // <= konsisten urutan
-    .slice(0, 3); // <= hanya top 3
+        return {
+          id: r.id,
+          bookingId: r.bookingId ?? "-",
+          category: r.category,
+          requestor: r.requestor,
+          department: r.department,
+          countdownISO,
+          countdownBadge: r.countdownBadge,
+        };
+      })
+      .sort(sortByDeadlineAsc);
+  }, []);
 
   // urutkan berdasar deadline terdekat, ambil 3 teratas
   const approvalMgmtRowsTop3 = [...approvalMgmtRows]
@@ -496,15 +583,15 @@ export default function DashboardHOD() {
             <div className="space-y-2">
               <LegendItem
                 color="#3B82F6"
-                label={`${approvalTravel.approved} Approved`}
+                label={`${travelSum.approved} Approved`}
               />
               <LegendItem
                 color="#FACC15"
-                label={`${approvalTravel.pending} Pending`}
+                label={`${travelSum.pending} Pending`}
               />
               <LegendItem
                 color="#EF4444"
-                label={`${approvalTravel.rejected} Rejected`}
+                label={`${travelSum.rejected} Rejected`}
               />
             </div>
           </div>
@@ -674,23 +761,63 @@ export default function DashboardHOD() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-slate-500">
-                <th className="py-2">ID</th>
-                <th className="py-2">Booking ID</th>
-                <th className="py-2">Category</th>
-                <th className="py-2">Requestor</th>
-                <th className="py-2">Department</th>
-                <th className="py-2">Request Date</th>
-                <th className="py-2">Approval Date</th>
-                <th className="py-2">Status</th>
-                <th className="py-2">Action</th>
+                <th className="py-2 text-center">ID</th>
+                <th className="py-2 text-center">Category</th>
+                <th className="py-2 text-center">Requestor</th>
+                <th className="py-2 text-center">Department</th>
+                <th className="py-2 text-center">Request Date</th>
+                <th className="py-2 text-center">Approval Date</th>
+                <th className="py-2 text-center">Status</th>
               </tr>
             </thead>
-            <tbody className="text-slate-500">
-              <tr className="border-t">
-                <td className="py-3" colSpan={9}>
-                  <div className="text-center">–</div>
-                </td>
-              </tr>
+            <tbody className="text-slate-700">
+              {approvalHistoryRows.length === 0 && (
+                <tr className="border-t">
+                  <td className="py-3" colSpan={9}>
+                    <div className="text-center text-slate-500">No history</div>
+                  </td>
+                </tr>
+              )}
+
+              {approvalHistoryRows.map((r) => (
+                <tr key={r.id} className="border-t">
+                  <td className="py-2 text-center">{r.id}</td>
+                  <td className="py-2 text-center">{r.category}</td>
+                  <td className="py-2 text-center">{r.requestor}</td>
+                  <td className="py-2 text-center">{r.department}</td>
+                  <td className="py-2 text-center">
+                    {new Date(r.requestDateISO).toLocaleDateString("id-ID", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </td>
+                  <td className="py-2 text-center">
+                    {new Date(r.approvalDateISO).toLocaleDateString("id-ID", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </td>
+                  <td className="py-2 text-center">
+                    <StatusBadge s={r.status} />
+                  </td>
+                  <td className="py-2 text-center">
+                    <button
+                      onClick={() =>
+                        router.push(
+                          `/dashboard?section=approval&id=${encodeURIComponent(
+                            r.id
+                          )}`
+                        )
+                      }
+                      className="px-3 py-1 text-xs rounded bg-[#bdd5fd] text-[#1755b9] hover:bg-[#e0e4ec]"
+                    >
+                      Detail
+                    </button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

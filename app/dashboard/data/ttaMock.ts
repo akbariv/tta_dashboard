@@ -3,6 +3,7 @@
 /* ========= Types & constants ========= */
 export type Department = "All" | "IT Governance" | "Finance" | "HRD" | "TTA";
 export type PeriodKey = "2023-2025" | "last-12" | "ytd";
+
 export const DEPARTMENTS: Department[] = [
   "All",
   "IT Governance",
@@ -10,6 +11,51 @@ export const DEPARTMENTS: Department[] = [
   "HRD",
   "TTA",
 ];
+
+type Emp = { name: string; id: string; department: string; position: string };
+
+type ApprovalBase = {
+  id: string;
+  kind: "travel" | "claim";
+  employee: Emp;
+  approval: {
+    requestDateISO: string;
+    deadlineISO: string;
+    status: "Pending" | "Approved" | "Rejected";
+    decisionDateISO?: string;   
+    reason?: string;            
+  };
+};
+
+
+export type TravelApproval = ApprovalBase & {
+  kind: "travel";
+  travel: {
+    requestId: string;
+    type: "Moda Internal" | "Moda Eksternal";
+    destination: string;
+    departureDateISO: string;
+    transportation: string;
+    estimatedCost: number;
+  };
+};
+
+export type ClaimApproval = ApprovalBase & {
+  kind: "claim";
+  claim: {
+    claimId: string;
+    bookingId: string;
+    requestId: string;
+    expenses: Array<{
+      category: string;
+      description: string;
+      amount: number;
+      attachment?: string;
+    }>;
+  };
+};
+
+export type ApprovalDetail = TravelApproval | ClaimApproval;
 
 const DEPT_MULT: Record<Department, number> = {
   All: 1,
@@ -30,29 +76,11 @@ export type ApprovalRow = {
   status?: "Pending" | "Approved" | "Rejected";
 };
 
-export type ApprovalDetail = {
-  employee: {
-    name: string;
-    id: string;
-    department: string;
-    position: string;
-  };
-  request: {
-    id: string;
-    type: string;
-    destination: string;
-    departureDateISO: string; // ISO string
-    transportation: string;
-    estimatedCost: number; // in IDR
-  };
-  approval: {
-    requestDateISO: string; // ISO string
-    deadlineISO: string; // ISO string
-    status: "Pending" | "Approved" | "Rejected";
-  };
-};
-
 const currency = (n: number) => Math.round(n);
+const addDays = (d: number) =>
+  new Date(Date.now() + d * 86400000).toISOString();
+const minusDays = (d: number) =>
+  new Date(Date.now() - d * 86400000).toISOString();
 
 /* ========= Base dataset (single source) ========= */
 const baseYearlyCost = [
@@ -89,7 +117,7 @@ const baseActiveTrip = [
   { label: "Upcoming Trip", internal: 2, external: 2 },
 ];
 
-/* ========= APPROVAL (list) ========= */
+/* ========= APPROVAL (list untuk tabel) ========= */
 export const approvalManagement: ApprovalRow[] = [
   {
     id: "TTA003",
@@ -117,23 +145,20 @@ export const approvalManagement: ApprovalRow[] = [
   },
 ];
 
-/* ========= APPROVAL (detail by id) ========= */
-const addDays = (d: number) =>
-  new Date(Date.now() + d * 86400000).toISOString();
-const minusDays = (d: number) =>
-  new Date(Date.now() - d * 86400000).toISOString();
-
-export const approvalDetailById: Record<string, ApprovalDetail> = {
-  // sesuai mockup: Alicia Key (Alice Key)
+/* ========= APPROVAL (detail: discriminated union) ========= */
+export const APPROVAL_DETAILS: Record<string, ApprovalDetail> = {
+  // Travel: Alice Key
   TTA003: {
+    id: "TTA003",
+    kind: "travel",
     employee: {
       name: "Alice Key",
       id: "EMP-2025-034",
       department: "IT",
       position: "Senior IT Governance Specialist",
     },
-    request: {
-      id: "TTA003",
+    travel: {
+      requestId: "TTA003",
       type: "Moda Eksternal",
       destination: "Bandung",
       departureDateISO: "2025-11-18T00:00:00.000Z",
@@ -142,22 +167,24 @@ export const approvalDetailById: Record<string, ApprovalDetail> = {
     },
     approval: {
       requestDateISO: "2025-10-25T00:00:00.000Z",
-      deadlineISO: addDays(1), // konsisten dengan dueInHours:24
+      deadlineISO: addDays(1), // sinkron dengan badge "24 hours"
       status: "Pending",
     },
   },
 
-  // Charles Muntz — data minimal tapi tetap lengkap
+  // Travel: Charles Muntz
   TTA004: {
+    id: "TTA004",
+    kind: "travel",
     employee: {
       name: "Charles Muntz",
       id: "EMP-2025-057",
       department: "Marketing",
       position: "Senior Marketing",
     },
-    request: {
-      id: "TTA004",
-      type: "Travel Request",
+    travel: {
+      requestId: "TTA004",
+      type: "Moda Eksternal",
       destination: "Semarang",
       departureDateISO: addDays(7),
       transportation: "Bus",
@@ -165,34 +192,45 @@ export const approvalDetailById: Record<string, ApprovalDetail> = {
     },
     approval: {
       requestDateISO: minusDays(2),
-      deadlineISO: addDays(3), // sesuai badge
+      deadlineISO: addDays(3), // sinkron badge "Approval due in 3 days"
       status: "Pending",
     },
   },
 
-  // Claim request
+  // Claim & Reimburse: Rudi
   "C2025-010": {
+    id: "C2025-010",
+    kind: "claim",
     employee: {
       name: "Rudi",
-      id: "EMP-2025-012",
+      id: "EMP-2025-040",
       department: "IT",
-      position: "—",
+      position: "Senior IT Governance Specialist",
     },
-    request: {
-      id: "C2025-010",
-      type: "Claim",
-      destination: "—",
-      departureDateISO: addDays(10),
-      transportation: "—",
-      estimatedCost: 0,
+    claim: {
+      claimId: "C2025-010",
+      bookingId: "Book2025-310",
+      requestId: "TTA003",
+      expenses: [
+        {
+          category: "Expense – Food",
+          description: "Lunch",
+          amount: 100_000,
+          attachment: "Invoice_Food.pdf",
+        },
+        { category: "Expense – Taxi", description: "–", amount: 0 },
+        { category: "Expense – Others", description: "–", amount: 0 },
+      ],
     },
     approval: {
-      requestDateISO: minusDays(3),
-      deadlineISO: addDays(2),
+      requestDateISO: "2025-11-01T00:00:00.000Z",
+      deadlineISO: "2025-11-05T00:00:00.000Z",
       status: "Pending",
     },
   },
 };
+
+export const approvalDetailById = APPROVAL_DETAILS;
 
 /* ========= Lain-lain (tetap) ========= */
 const approvalCards = {
@@ -313,7 +351,8 @@ export const MOCK = {
   approval: {
     cards: approvalCards,
     managementRows: approvalManagement,
-    detailById: approvalDetailById,
+    // untuk kompatibilitas dengan kode lama
+    detailById: APPROVAL_DETAILS,
     historyRows: [] as any[],
   },
   myRequest: {
@@ -343,7 +382,7 @@ export const MOCK = {
   },
 };
 
-/* ========= Selectors (tetap) ========= */
+/* ========= Selectors ========= */
 export function getYearlyTravelCost(
   dept: Department = "All",
   period: PeriodKey = "2023-2025"
@@ -390,6 +429,25 @@ export function getAllRequest(dept: Department = "All") {
   return baseAllRequest.map((x) => ({ ...x, value: Math.round(x.value * m) }));
 }
 
+export function getApprovalManagementPendingRows(
+  base: ApprovalRow[] = approvalManagement
+): ApprovalRow[] {
+  const decided = loadDecisionStore();
+  return base.filter(r => !decided[r.id]); // yang sudah Approved/Rejected disembunyikan
+}
+
+export function getCategorySummary(
+  list: Array<{ id: string; category: string; status?: "Pending"|"Approved"|"Rejected" }>
+): Record<string, { approved: number; pending: number; rejected: number }> {
+  const applied = applyDecisionsToList(list);
+  return applied.reduce((acc, r) => {
+    const k = r.category;
+    if (!acc[k]) acc[k] = { approved: 0, pending: 0, rejected: 0 };
+    acc[k][r.status.toLowerCase() as "approved"|"pending"|"rejected"]++;
+    return acc;
+  }, {} as Record<string, { approved: number; pending: number; rejected: number }>);
+}
+
 export function getApprovalTrend(dept: Department = "All") {
   const m = DEPT_MULT[dept];
   return baseApprovalTrend.map((x) => ({
@@ -419,4 +477,87 @@ export function getActiveTripStacked(dept: Department = "All") {
     internal: Math.round(x.internal * m),
     external: Math.round(x.external * m),
   }));
+}
+
+
+/* ===================== PERSIST & SELECTORS (cross-page) ===================== */
+
+export type DecisionStatus = "Approved" | "Rejected";
+export type DecisionRecord = {
+  status: DecisionStatus;
+  decisionDateISO: string;
+  reason?: string;
+};
+
+export const DECISION_STORAGE_KEY = "tta_approval_decisions_v1";
+
+/** baca seluruh keputusan yang tersimpan */
+export function loadDecisionStore(): Record<string, DecisionRecord> {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem(DECISION_STORAGE_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+/** simpan/overwrite keputusan untuk 1 id */
+export function persistDecision(id: string, rec: DecisionRecord) {
+  const store = loadDecisionStore();
+  store[id] = rec;
+  localStorage.setItem(DECISION_STORAGE_KEY, JSON.stringify(store));
+}
+
+/** utilities opsional */
+export function clearDecision(id: string) {
+  const store = loadDecisionStore();
+  delete store[id];
+  localStorage.setItem(DECISION_STORAGE_KEY, JSON.stringify(store));
+}
+export function resetAllDecisions() {
+  localStorage.removeItem(DECISION_STORAGE_KEY);
+}
+
+/** override status dari base data dengan keputusan yang tersimpan */
+export function applyDecisionsToList<
+  T extends { id: string; status?: "Pending" | "Approved" | "Rejected" }
+>(list: T[]): (T & { status: "Pending" | "Approved" | "Rejected" })[] {
+  const store = loadDecisionStore();
+  return list.map((it) => {
+    const rec = store[it.id];
+    return {
+      ...it,
+      status: (rec?.status ?? it.status ?? "Pending") as
+        | "Pending"
+        | "Approved"
+        | "Rejected",
+    };
+  });
+}
+
+export function getPendingApprovals<
+  T extends { id: string; status?: "Pending" | "Approved" | "Rejected" }
+>(list: T[]) {
+  return applyDecisionsToList(list).filter((x) => x.status === "Pending");
+}
+
+/** hitung ringkasan per kategori (untuk donut) */
+export function countByCategory(
+  category: string,
+  list: Array<{
+    id: string;
+    category: string;
+    status?: "Pending" | "Approved" | "Rejected";
+  }>
+) {
+  const applied = applyDecisionsToList(list.filter((x) => x.category === category));
+  let approved = 0,
+    rejected = 0,
+    pending = 0;
+  for (const r of applied) {
+    if (r.status === "Approved") approved++;
+    else if (r.status === "Rejected") rejected++;
+    else pending++;
+  }
+  return { approved, pending, rejected };
 }
