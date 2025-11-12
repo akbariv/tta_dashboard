@@ -12,162 +12,21 @@ import {
   MapEmbed,
   IDR,
   Pie,
-  ThickDonut,
   FilterDropdown,
 } from "@/app/dashboard/components/common";
 
-/* ================== DUMMY DATA (UI-ONLY) ================== */
-/** Section: Approval (atas) */
-const approvalTravel = { approved: 6, pending: 3, rejected: 1 };
-const approvalClaim = { approved: 6, pending: 0, rejected: 0 };
-const approvalBooking = { approved: 2, pending: 0, rejected: 3 };
-
-/* ---------- KPI DUMMY DATA ---------- */
-const MONTHLY_COST = [8, 5, 7, 9, 12, 10, 14, 15, 9, 7, 6, 11];
-const ALL_REQUEST = [
-  { label: "Travel", value: 10, color: "#0072FF" },
-  { label: "Claim & Reimburse", value: 6, color: "#00CDC7" },
-  { label: "Change Booking", value: 5, color: "#FF8743" },
-];
-const CHANGE_BOOKING = [
-  { label: "Reschedule", value: 2 },
-  { label: "Cancel & Refund", value: 1 },
-  { label: "Cancel & No Refund", value: 1 },
-];
-const APPROVAL_TREND = {
-  labels: ["Travel Request", "Claim & Reimburse", "Change Booking"],
-  series: [
-    { name: "Approved", values: [10, 8, 9], color: "#3B82F6" },
-    { name: "Pending", values: [2, 1, 1], color: "#FACC15" },
-    { name: "Rejected", values: [1, 0, 1], color: "#EF4444" },
-  ],
-};
-const YEARLY_COST = [
-  { label: "2023", value: 100 },
-  { label: "2024", value: 130 },
-  { label: "2025", value: 120 },
-];
-
-type ApproveRow = {
-  id: string;
-  bookingId?: string;
-  category: string;
-  requestor: string;
-  department: string;
-  countdownISO: string; // target date for countdown
-};
-const approvalMgmtRows: ApproveRow[] = [
-  {
-    id: "TTA003",
-    bookingId: "-",
-    category: "Travel Request",
-    requestor: "Alice Key",
-    department: "IT Governance",
-    countdownISO: "2025-11-10T09:00:00Z",
-  },
-  {
-    id: "C2025-010",
-    bookingId: "Book2025-310",
-    category: "Claim Request",
-    requestor: "Rudi",
-    department: "IT Governance",
-    countdownISO: "2025-11-12T09:00:00Z",
-  },
-];
-
-/** Section: My Request (tengah) */
-const myTravelReq = { approved: 6, pending: 0, rejected: 2 };
-const myClaim = { approved: 6, pending: 0, rejected: 0 };
-const myBooking = { approved: 3, pending: 2, rejected: 1 };
-
-type TripRow = {
-  id: string;
-  type: "Moda Eksternal" | "Moda Internal";
-  destination: string;
-  date: string; // ISO
-};
-const upcomingTrips: TripRow[] = [
-  {
-    id: "TTA031",
-    type: "Moda Eksternal",
-    destination: "Jakarta → Bali",
-    date: "2025-11-10",
-  },
-  {
-    id: "TTA032",
-    type: "Moda Eksternal",
-    destination: "Bali → Jakarta",
-    date: "2025-11-14",
-  },
-  {
-    id: "TTA033",
-    type: "Moda Internal",
-    destination: "Jakarta → Bandung",
-    date: "2025-10-02",
-  },
-];
-
-type ClaimRow = {
-  id: string;
-  tripId: string;
-  type: string;
-  requestDate: string;
-  status: "Pending" | "Approved" | "Rejected";
-};
-const claimTracker: ClaimRow[] = [
-  {
-    id: "C2025-031",
-    tripId: "TTA041",
-    type: "Expense - Food",
-    requestDate: "2025-10-20",
-    status: "Pending",
-  },
-  {
-    id: "C2025-032",
-    tripId: "TTA042",
-    type: "Expense - Taxi",
-    requestDate: "2025-10-14",
-    status: "Approved",
-  },
-  {
-    id: "C2025-033",
-    tripId: "TTA045",
-    type: "Expense - Taxi",
-    requestDate: "2025-10-11",
-    status: "Approved",
-  },
-];
-
-type ReqRow = {
-  id: string;
-  category: string;
-  type: "Moda Eksternal" | "Moda Internal";
-  requestDate: string;
-  status: "Approved" | "Pending" | "Rejected";
-};
-const requestTracker: ReqRow[] = [
-  {
-    id: "TTA001",
-    category: "Travel Req.",
-    type: "Moda Eksternal",
-    requestDate: "2025-10-25",
-    status: "Approved",
-  },
-  {
-    id: "TTA002",
-    category: "Changes Req.",
-    type: "Moda Eksternal",
-    requestDate: "2025-10-29",
-    status: "Approved",
-  },
-  {
-    id: "TTA003",
-    category: "Travel Req.",
-    type: "Moda Internal",
-    requestDate: "2025-10-29",
-    status: "Pending",
-  },
-];
+import {
+  MOCK,
+  getMonthlyTravelCost,
+  getYearlyTravelCost,
+  getAllRequest,
+  getChangeBooking,
+  getApprovalTrend,
+  getSla,
+  getActiveTripStacked,
+  type Department,
+  type PeriodKey,
+} from "@/app/dashboard/data/ttaMock";
 
 /* ================== HELPERS ================== */
 function daysLeft(dateISO: string) {
@@ -183,21 +42,6 @@ function daysLeft(dateISO: string) {
 
 /* ---------- SIMPLE CHARTS (SVG) ---------- */
 type Pt = { label: string; value: number };
-
-const months = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "Mei",
-  "Jun",
-  "Jul",
-  "Agu",
-  "Sept",
-  "Okt",
-  "Nov",
-  "Des",
-];
 
 function SimpleBarChart({ data }: { data: Array<Pt & { color?: string }> }) {
   const max = Math.max(...data.map((d) => d.value), 1);
@@ -261,7 +105,6 @@ function SimpleLineChart({
   data: { label: string; value: number }[];
   yFormatter?: (v: number) => string;
 }) {
-  // ---- nice ticks (0..niceMax) ----
   const niceStep = (rough: number) => {
     const p = Math.pow(10, Math.floor(Math.log10(rough)));
     const e = rough / p;
@@ -274,12 +117,11 @@ function SimpleLineChart({
   const niceMax = Math.ceil(maxVal / stepY) * stepY;
   const ticks = Array.from({ length: TICKS + 1 }, (_, i) => i * stepY);
 
-  // ---- dynamic left pad (biar label Rp ga kepotong) ----
+  // dynamic left pad (biar label Rp ga kepotong)
   const sample = yFormatter ? yFormatter(niceMax) : String(niceMax);
-  const approxTextW = Math.ceil(sample.length * 7); // ~7px/char
+  const approxTextW = Math.ceil(sample.length * 7);
   const padL = Math.max(72, approxTextW + 14);
 
-  // canvas
   const W = 680,
     H = 220;
   const padT = 28,
@@ -310,8 +152,6 @@ function SimpleLineChart({
         fill="white"
         stroke="#e5e7eb"
       />
-
-      {/* grid & Y labels */}
       {ticks.map((t, i) => {
         const y = padT + innerH - (t / niceMax) * innerH;
         return (
@@ -336,8 +176,6 @@ function SimpleLineChart({
           </g>
         );
       })}
-
-      {/* line + dots */}
       <polyline points={points} fill="none" stroke="#3B82F6" strokeWidth="3" />
       {data.map((d, i) => {
         const x = padL + i * stepX;
@@ -354,8 +192,6 @@ function SimpleLineChart({
           />
         );
       })}
-
-      {/* X labels */}
       {data.map((d, i) => (
         <text
           key={i}
@@ -439,61 +275,151 @@ function GroupedBarChart({
   );
 }
 
-/** tiny bar/line placeholders (no libs) */
-function Bars({ data }: { data: number[] }) {
-  const max = Math.max(...data, 1);
-  return (
-    <div className="flex items-end gap-2 h-40">
-      {data.map((v, i) => (
-        <div key={i} className="flex-1 bg-slate-100 rounded">
-          <div
-            className="w-full rounded-t bg-sky-500"
-            style={{ height: `${(v / max) * 100}%` }}
-          />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Line({ data }: { data: number[] }) {
-  const max = Math.max(...data, 1);
-  return (
-    <div className="relative h-40">
-      <svg className="absolute inset-0 w-full h-full pointer-events-none select-none">
-        <polyline
-          fill="none"
-          stroke="#3B82F6"
-          strokeWidth="3"
-          points={data
-            .map((v, i) => {
-              const x = (i / (data.length - 1)) * 100;
-              const y = 100 - (v / max) * 100;
-              return `${x},${y}`;
-            })
-            .join(" ")}
-        />
-      </svg>
-      <div className="absolute inset-0 border rounded" />
-    </div>
-  );
-}
-
 /* ================== PAGE ================== */
 export default function DashboardHOD() {
-  // Budget (HOD view – contoh angka besar untuk KPI)
-  const [budget, setBudget] = React.useState({
-    initial: 150_000_000,
-    used: 40_000_000,
-  });
-  React.useEffect(() => setBudget((b) => b), []);
-  const refunded = 15_000_000;
-  const loss = 5_000_000;
-  const usedNet = Math.max(0, budget.used - refunded - loss);
-  const remaining = Math.max(0, budget.initial - (usedNet + refunded + loss));
+  // Filter dropdowns
   const [dept, setDept] = React.useState<string>("all");
   const [period, setPeriod] = React.useState<string>("2023-2025");
 
+  // Map UI -> tipe di mock
+  const deptMap: Record<string, Department> = {
+    all: "All",
+    fin: "Finance",
+    hrd: "HRD",
+    tta: "TTA",
+  };
+  const periodMap: Record<string, PeriodKey> = {
+    "2023-2025": "2023-2025",
+    "last-12": "last-12",
+    ytd: "ytd",
+    thisyear: "last-12",
+  };
+  const d: Department = deptMap[dept] ?? "All";
+  const p: PeriodKey = periodMap[period] ?? "2023-2025";
+
+  /* ======= DATA DARI MOCK ======= */
+  // Approval cards
+  const approvalTravel = MOCK.approval.cards.travelRequest;
+  const approvalClaim = MOCK.approval.cards.claim;
+  const approvalBooking = MOCK.approval.cards.booking;
+
+  // Approval management table
+  const approvalMgmtRows = MOCK.approval.managementRows.map((r: any) => {
+    const now = Date.now();
+    const countdownISO = r.dueInHours
+      ? new Date(now + r.dueInHours * 3600_000).toISOString()
+      : r.dueInDays
+      ? new Date(now + r.dueInDays * 86400_000).toISOString()
+      : new Date(now + 24 * 3600_000).toISOString();
+    return {
+      id: r.id,
+      bookingId: r.bookingId ?? "-",
+      category: r.category,
+      requestor: r.requestor,
+      department: r.department,
+      countdownISO,
+    };
+  });
+
+  // My Request
+  const myTravelReq = MOCK.myRequest.cards.travelRequest;
+  const myClaim = MOCK.myRequest.cards.claim;
+  const myBooking = MOCK.myRequest.cards.booking;
+
+  const upcomingTrips = MOCK.myRequest.activeTrips.map((t: any) => ({
+    id: t.tripId ?? t.id,
+    type: t.type,
+    destination: t.destination,
+    date: t.date,
+  }));
+
+  const claimTracker = MOCK.myRequest.claimTracker.map((c: any) => ({
+    id: c.claimId ?? c.id,
+    tripId: c.tripId,
+    type: c.type,
+    requestDate: c.requestDate,
+    status: c.status,
+  }));
+
+  const requestTracker = MOCK.myRequest.requestTracker;
+  const tBudget = MOCK.myRequest.travelBudget;
+
+  // Budget (Dept KPI)
+  const budget = MOCK.deptKpi.budget ?? {
+    initial: 150_000_000,
+    used: 40_000_000,
+  };
+  const refunded = budget.refunded ?? 15_000_000;
+  const loss = budget.loss ?? 5_000_000;
+  const usedGross = budget.used ?? 40_000_000;
+  const usedNet = Math.max(0, usedGross - refunded - loss);
+  const remaining = Math.max(
+    0,
+    (budget.initial ?? 150_000_000) - (usedNet + refunded + loss)
+  );
+
+  // Charts (Dept KPI)
+  const MONTHLY_COST = getMonthlyTravelCost(d, p).map((m) => ({
+    label: m.month,
+    value: m.amount,
+  }));
+
+  const YEARLY_COST = getYearlyTravelCost(d, p).map((y) => ({
+    label: String(y.year),
+    value: y.amount,
+  }));
+
+  const ALL_REQUEST = getAllRequest(d).map((x, i) => ({
+    label: x.label,
+    value: x.value,
+    color: ["#0072FF", "#00CDC7", "#FF8743"][i % 3],
+  }));
+
+  const CHANGE_BOOKING = getChangeBooking(d).map((x, i) => ({
+    label: x.label,
+    value: x.value,
+    color: ["#3B82F6", "#FACC15", "#EF4444"][i % 3],
+  }));
+
+  const _trend = getApprovalTrend(d);
+  const APPROVAL_TREND = {
+    labels: _trend.map((t) => t.label),
+    series: [
+      {
+        name: "Approved",
+        values: _trend.map((t) => t.approved),
+        color: "#3B82F6",
+      },
+      {
+        name: "Pending",
+        values: _trend.map((t) => t.pending),
+        color: "#FACC15",
+      },
+      {
+        name: "Rejected",
+        values: _trend.map((t) => t.rejected),
+        color: "#EF4444",
+      },
+    ],
+  };
+
+  const SLA = getSla(); // { complete, nonCompliance }
+
+  const _active = getActiveTripStacked(d);
+  const ACTIVE_TRIP_SERIES = [
+    {
+      name: "Moda Internal",
+      values: _active.map((a) => a.internal),
+      color: "#33D7D2",
+    },
+    {
+      name: "Moda Eksternal",
+      values: _active.map((a) => a.external),
+      color: "#FCD532",
+    },
+  ];
+
+  /* ================== UI ================== */
   return (
     <div className="space-y-6">
       {/* ====== SECTION: APPROVAL ====== */}
@@ -664,7 +590,7 @@ export default function DashboardHOD() {
               </tr>
             </thead>
             <tbody className="text-slate-700">
-              {approvalMgmtRows.map((r) => (
+              {approvalMgmtRows.map((r: any) => (
                 <tr key={r.id} className="border-t">
                   <td className="py-2">{r.id}</td>
                   <td className="py-2">{r.bookingId ?? "-"}</td>
@@ -757,9 +683,18 @@ export default function DashboardHOD() {
               ]}
             />
             <div className="space-y-2">
-              <LegendItem color="#3B82F6" label="6 Approved" />
-              <LegendItem color="#FACC15" label="0 Pending" />
-              <LegendItem color="#EF4444" label="2 Rejected" />
+              <LegendItem
+                color="#3B82F6"
+                label={`${myTravelReq.approved} Approved`}
+              />
+              <LegendItem
+                color="#FACC15"
+                label={`${myTravelReq.pending} Pending`}
+              />
+              <LegendItem
+                color="#EF4444"
+                label={`${myTravelReq.rejected} Rejected`}
+              />
             </div>
           </div>
         </Card>
@@ -785,9 +720,18 @@ export default function DashboardHOD() {
               ]}
             />
             <div className="space-y-2">
-              <LegendItem color="#3B82F6" label="6 Approved" />
-              <LegendItem color="#FACC15" label="0 Pending" />
-              <LegendItem color="#EF4444" label="0 Rejected" />
+              <LegendItem
+                color="#3B82F6"
+                label={`${myClaim.approved} Approved`}
+              />
+              <LegendItem
+                color="#FACC15"
+                label={`${myClaim.pending} Pending`}
+              />
+              <LegendItem
+                color="#EF4444"
+                label={`${myClaim.rejected} Rejected`}
+              />
             </div>
           </div>
         </Card>
@@ -817,9 +761,18 @@ export default function DashboardHOD() {
               ]}
             />
             <div className="space-y-2">
-              <LegendItem color="#3B82F6" label="3 Approved" />
-              <LegendItem color="#FACC15" label="2 Pending" />
-              <LegendItem color="#EF4444" label="1 Rejected" />
+              <LegendItem
+                color="#3B82F6"
+                label={`${myBooking.approved} Approved`}
+              />
+              <LegendItem
+                color="#FACC15"
+                label={`${myBooking.pending} Pending`}
+              />
+              <LegendItem
+                color="#EF4444"
+                label={`${myBooking.rejected} Rejected`}
+              />
             </div>
           </div>
         </Card>
@@ -831,7 +784,7 @@ export default function DashboardHOD() {
           title="Travel Budget"
           right={
             <span className="text-xs px-2.5 py-1 rounded-full bg-sky-100 text-sky-700">
-              Initial Budget {IDR(budget.initial)}
+              Initial Budget {IDR(tBudget.initial)}
             </span>
           }
         >
@@ -841,32 +794,40 @@ export default function DashboardHOD() {
               thickness={22}
               bg="#ffffff"
               slices={[
-                { label: "Remaining", value: remaining, color: "#10B981" },
-                { label: "Used Budget", value: usedNet, color: "#F59E0B" },
-                { label: "Refunded Budget", value: refunded, color: "#3B82F6" },
-                { label: "Budget Loss", value: loss, color: "#EF4444" },
+                {
+                  label: "Remaining",
+                  value: tBudget.remaining,
+                  color: "#10B981",
+                },
+                { label: "Used Budget", value: tBudget.used, color: "#F59E0B" },
+                {
+                  label: "Refunded Budget",
+                  value: tBudget.refunded,
+                  color: "#3B82F6",
+                },
+                { label: "Budget Loss", value: tBudget.loss, color: "#EF4444" },
               ]}
             />
             <div className="grid grid-cols-1 gap-2">
               <LegendItem
                 color="#10B981"
                 label="Remaining Budget"
-                value={IDR(remaining)}
+                value={IDR(tBudget.remaining)}
               />
               <LegendItem
                 color="#F59E0B"
                 label="Used Budget"
-                value={IDR(usedNet)}
+                value={IDR(tBudget.used)}
               />
               <LegendItem
                 color="#3B82F6"
                 label="Refunded Budget"
-                value={IDR(refunded)}
+                value={IDR(tBudget.refunded)}
               />
               <LegendItem
                 color="#EF4444"
                 label="Budget Loss"
-                value={IDR(loss)}
+                value={IDR(tBudget.loss)}
               />
             </div>
           </div>
@@ -894,7 +855,7 @@ export default function DashboardHOD() {
                 </tr>
               </thead>
               <tbody className="text-slate-700">
-                {upcomingTrips.map((r) => (
+                {upcomingTrips.map((r: any) => (
                   <tr key={r.id} className="border-t">
                     <td className="py-2">{r.id}</td>
                     <td className="py-2">{r.type}</td>
@@ -942,7 +903,7 @@ export default function DashboardHOD() {
                 </tr>
               </thead>
               <tbody className="text-slate-700">
-                {claimTracker.map((r) => (
+                {claimTracker.map((r: any) => (
                   <tr key={r.id} className="border-t">
                     <td className="py-2">{r.id}</td>
                     <td className="py-2">{r.tripId}</td>
@@ -985,7 +946,7 @@ export default function DashboardHOD() {
                 </tr>
               </thead>
               <tbody className="text-slate-700">
-                {requestTracker.map((r) => (
+                {requestTracker.map((r: any) => (
                   <tr key={r.id} className="border-t">
                     <td className="py-2">{r.id}</td>
                     <td className="py-2">{r.category}</td>
@@ -1092,7 +1053,6 @@ export default function DashboardHOD() {
                 { label: "Budget Loss", value: loss, color: "#EF4444" },
               ]}
             />
-
             <div className="grid grid-cols-1 gap-2">
               <LegendItem
                 color="#10B981"
@@ -1146,9 +1106,7 @@ export default function DashboardHOD() {
             </div>
           }
         >
-          <SimpleBarChart
-            data={months.map((m, i) => ({ label: m, value: MONTHLY_COST[i] }))}
-          />
+          <SimpleBarChart data={MONTHLY_COST} />
         </Card>
 
         <Card
@@ -1179,10 +1137,7 @@ export default function DashboardHOD() {
             </div>
           }
         >
-          <SimpleLineChart
-            data={YEARLY_COST}
-            yFormatter={(v) => IDR(v * 1_000_000)}
-          />
+          <SimpleLineChart data={YEARLY_COST} yFormatter={(v) => IDR(v)} />
         </Card>
 
         <Card
@@ -1285,6 +1240,7 @@ export default function DashboardHOD() {
             <LegendItem color="#EF4444" label="Rejected" />
           </div>
         </Card>
+
         <Card
           title="SLA Approval Trend"
           right={
@@ -1317,8 +1273,16 @@ export default function DashboardHOD() {
             <Pie
               size={140}
               slices={[
-                { label: "SLA Completion", value: 92, color: "#3B82F6" },
-                { label: "Non-Compliance", value: 8, color: "#EF4444" },
+                {
+                  label: "SLA Completion",
+                  value: SLA.complete,
+                  color: "#3B82F6",
+                },
+                {
+                  label: "Non-Compliance",
+                  value: SLA.nonCompliance,
+                  color: "#EF4444",
+                },
               ]}
             />
             <div className="space-y-2">
@@ -1368,19 +1332,17 @@ export default function DashboardHOD() {
           }
         >
           <GroupedBarChart
-            labels={["Active Trip", "Upcoming Trip"]}
-            series={[
-              { name: "Moda Internal", values: [1, 2], color: "#33D7D2" },
-              { name: "Moda Eksternal", values: [2, 2], color: "#FCD532" },
-            ]}
+            labels={_active.map((a) => a.label)}
+            series={ACTIVE_TRIP_SERIES}
           />
           <div className="mt-2 flex gap-4">
             <LegendItem color="#33D7D2" label="Moda Internal" />
             <LegendItem color="#FCD532" label="Moda Eksternal" />
           </div>
         </Card>
-        {/* CTA di pojok kanan bawah */}
       </div>
+
+      {/* CTA di pojok kanan bawah */}
       <div className="mt-4 flex justify-end gap-3">
         <button
           onClick={() => console.log("Schedule Report")}
@@ -1388,7 +1350,6 @@ export default function DashboardHOD() {
         >
           Schedule Report
         </button>
-
         <button
           onClick={() => console.log("Download Report")}
           className="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-[#2563EB] shadow hover:bg-[#1D4ED8] transition"
