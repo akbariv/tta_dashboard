@@ -72,7 +72,7 @@ interface SidebarProps {
 
 export function Sidebar({ activeMenu = 'chatbot', onMenuClick }: SidebarProps) {
   return (
-    <div className="bg-white h-screen w-[240px] flex flex-col relative border-r border-[#E0E0E0]">
+    <div className="bg-white h-screen w-[240px] flex flex-col sticky top-0 z-20 border-r border-[#E0E0E0]">
       {/* Logo */}
       <div className="h-[67px] flex items-center px-[35px]">
         <img
