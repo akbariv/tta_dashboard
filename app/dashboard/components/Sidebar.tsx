@@ -1,6 +1,11 @@
 function LogoutIcon() {
   return (
-    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 22 22">
+    <svg
+      className="block size-full"
+      fill="none"
+      preserveAspectRatio="none"
+      viewBox="0 0 22 22"
+    >
       <g id="logout">
         <path
           clipRule="evenodd"
@@ -15,7 +20,12 @@ function LogoutIcon() {
 
 function HomeIcon() {
   return (
-    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 22 22">
+    <svg
+      className="block size-full"
+      fill="none"
+      preserveAspectRatio="none"
+      viewBox="0 0 22 22"
+    >
       <g clipPath="url(#clip0_1_392)">
         <path
           d="M21.4063 9.56894L21.4048 9.56743L12.4306 0.593506C12.048 0.210815 11.5395 0 10.9985 0C10.4575 0 9.94894 0.210648 9.56625 0.593338L0.596695 9.56273C0.593674 9.56575 0.590653 9.56894 0.587631 9.57196C-0.197891 10.362 -0.196548 11.6439 0.591492 12.4319C0.951523 12.7921 1.42703 13.0007 1.93544 13.0226C1.95609 13.0246 1.9769 13.0256 1.99788 13.0256H2.35556V19.6298C2.35556 20.9367 3.41887 22 4.72606 22H8.23708C8.59291 22 8.88161 21.7115 8.88161 21.3555V16.1777C8.88161 15.5814 9.36668 15.0963 9.96304 15.0963H12.0339C12.6303 15.0963 13.1154 15.5814 13.1154 16.1777V21.3555C13.1154 21.7115 13.4039 22 13.7599 22H17.2709C18.5781 22 19.6414 20.9367 19.6414 19.6298V13.0256H19.9731C20.5139 13.0256 21.0225 12.8149 21.4053 12.4322C22.1942 11.6429 22.1945 10.3588 21.4063 9.56894Z"
@@ -33,7 +43,12 @@ function HomeIcon() {
 
 function SettingsIcon() {
   return (
-    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 22 22">
+    <svg
+      className="block size-full"
+      fill="none"
+      preserveAspectRatio="none"
+      viewBox="0 0 22 22"
+    >
       <g>
         <path
           d="M18.5625 11.5225V11V10.4706L19.8825 9.31562C20.1258 9.10116 20.2855 8.80758 20.3333 8.48678C20.3811 8.16597 20.314 7.83859 20.1437 7.5625L18.5212 4.8125C18.4007 4.60368 18.2273 4.43024 18.0186 4.30957C17.8098 4.1889 17.573 4.12525 17.3319 4.125C17.1824 4.12386 17.0338 4.14708 16.8919 4.19375L15.2212 4.7575C14.9328 4.56583 14.6319 4.39357 14.3206 4.24188L13.97 2.50937C13.9071 2.19285 13.7349 1.90853 13.4836 1.70617C13.2322 1.50381 12.9176 1.39632 12.595 1.4025H9.3775C9.05485 1.39632 8.74031 1.50381 8.48894 1.70617C8.23756 1.90853 8.06537 2.19285 8.0025 2.50937L7.65188 4.24188C7.33833 4.39354 7.03517 4.56579 6.74438 4.7575L5.10813 4.16625C4.96464 4.12887 4.81606 4.11494 4.66813 4.125C4.427 4.12525 4.19018 4.1889 3.98142 4.30957C3.77267 4.43024 3.59931 4.60368 3.47875 4.8125L1.85625 7.5625C1.69578 7.83818 1.63615 8.16108 1.68757 8.47589C1.73899 8.7907 1.89827 9.07784 2.13813 9.28812L3.4375 10.4775V11.5294L2.13813 12.6844C1.8915 12.8961 1.72786 13.1884 1.67626 13.5093C1.62466 13.8303 1.68843 14.1591 1.85625 14.4375L3.47875 17.1875C3.59931 17.3963 3.77267 17.5698 3.98142 17.6904C4.19018 17.8111 4.427 17.8748 4.66813 17.875C4.81755 17.8761 4.96617 17.8529 5.10813 17.8062L6.77875 17.2425C7.06718 17.4342 7.36806 17.6064 7.67938 17.7581L8.03 19.4906C8.09287 19.8071 8.26506 20.0915 8.51644 20.2938C8.76781 20.4962 9.08235 20.6037 9.405 20.5975H12.65C12.9726 20.6037 13.2872 20.4962 13.5386 20.2938C13.7899 20.0915 13.9621 19.8071 14.025 19.4906L14.3756 17.7581C14.6892 17.6065 14.9923 17.4343 15.2831 17.2425L16.9469 17.8062C17.0888 17.8529 17.2374 17.8761 17.3869 17.875C17.628 17.8748 17.8648 17.8111 18.0736 17.6904C18.2823 17.5698 18.4557 17.3963 18.5762 17.1875L20.1437 14.4375C20.3042 14.1619 20.3638 13.839 20.3124 13.5242C20.261 13.2094 20.1017 12.9223 19.8619 12.712L18.5625 11.5225ZM17.3319 16.5001L14.9737 15.7026C14.4217 16.1702 13.7908 16.5357 13.1106 16.782L12.6225 19.2501H9.3775L8.88937 16.8095C8.21454 16.5562 7.58705 16.1913 7.03312 15.7301L4.66812 16.5001L3.04562 13.7501L4.91562 12.1001C4.7885 11.3884 4.7885 10.6599 4.91562 9.94822L3.04562 8.2501L4.66812 5.5001L7.02625 6.2976C7.57827 5.83002 8.20916 5.46452 8.88937 5.21822L9.3775 2.7501H12.6225L13.1106 5.19072C13.7855 5.44401 14.4129 5.80888 14.9669 6.2701L17.3319 5.5001L18.9544 8.2501L17.0844 9.9001C17.2115 10.6118 17.2115 11.3403 17.0844 12.052L18.9544 13.7501L17.3319 16.5001Z"
@@ -50,7 +65,12 @@ function SettingsIcon() {
 
 function ChatbotIcon() {
   return (
-    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 22 22">
+    <svg
+      className="block size-full"
+      fill="none"
+      preserveAspectRatio="none"
+      viewBox="0 0 22 22"
+    >
       <g>
         <path
           d="M8.25 18.3333C8.25 18.1388 8.32243 17.9523 8.45137 17.8147C8.5803 17.6772 8.75516 17.5999 8.9375 17.5999H13.0625C13.2448 17.5999 13.4197 17.6772 13.5486 17.8147C13.6776 17.9523 13.75 18.1388 13.75 18.3333C13.75 18.5278 13.6776 18.7143 13.5486 18.8518C13.4197 18.9893 13.2448 19.0666 13.0625 19.0666H8.9375C8.75516 19.0666 8.5803 18.9893 8.45137 18.8518C8.32243 18.7143 8.25 18.5278 8.25 18.3333ZM4.125 11.8242C4.125 9.91463 5.82313 8.45529 7.60375 8.63276C9.86301 8.85768 12.137 8.85768 14.3963 8.63276C16.1769 8.45529 17.875 9.91463 17.875 11.8242V13.5212C17.8806 13.8457 17.7779 14.1617 17.5852 14.4129C17.3926 14.6641 17.1224 14.8341 16.8231 14.8925C15.6613 15.1081 13.6056 15.3999 11 15.3999C8.39438 15.3999 6.33875 15.1066 5.17688 14.8925C4.87756 14.8341 4.60745 14.6641 4.41477 14.4129C4.22209 14.1617 4.11939 13.8457 4.125 13.5212V11.8242ZM10.3703 10.6113C10.3167 10.6016 10.2617 10.6055 10.2098 10.6229C10.158 10.6402 10.1107 10.6704 10.0719 10.711L8.80688 12.031C7.94646 11.9763 7.0883 11.8868 6.23425 11.7626C6.14575 11.7532 6.05728 11.7808 5.98744 11.8395C5.9176 11.8983 5.87181 11.9836 5.85971 12.0776C5.84761 12.1716 5.87012 12.2669 5.92253 12.3436C5.97494 12.4202 6.05316 12.4722 6.14075 12.4886C6.897 12.6001 7.83475 12.7072 8.91825 12.7717C8.96598 12.7746 9.01374 12.7668 9.05848 12.7488C9.10323 12.7309 9.14398 12.7032 9.17813 12.6676L10.2149 11.5881L11.3795 14.0961C11.404 14.1487 11.4401 14.1943 11.4846 14.2289C11.529 14.2636 11.5807 14.2863 11.6351 14.2952C11.6896 14.3042 11.7453 14.299 11.7974 14.2802C11.8496 14.2613 11.8968 14.2294 11.935 14.187L13.2165 12.7644C14.1004 12.7084 14.9819 12.6164 15.8593 12.4887C15.9468 12.4722 16.0251 12.4202 16.0775 12.3436C16.1299 12.2669 16.1524 12.1716 16.1403 12.0776C16.1282 11.9836 16.0824 11.8983 16.0126 11.8396C15.9427 11.7808 15.8543 11.7533 15.7658 11.7627C15.026 11.8712 14.1061 11.9753 13.0433 12.0398C12.9567 12.045 12.8752 12.0848 12.815 12.1513L11.7783 13.3026L10.6205 10.8093C10.5964 10.7576 10.5611 10.7127 10.5176 10.6783C10.4741 10.6439 10.4236 10.621 10.3703 10.6113Z"
@@ -65,12 +85,38 @@ function ChatbotIcon() {
   );
 }
 
-interface SidebarProps {
-  activeMenu?: 'dashboard' | 'chatbot' | 'settings';
-  onMenuClick?: (menu: 'dashboard' | 'chatbot' | 'settings' | 'logout') => void;
+function ApprovalIcon() {
+  return (
+    <svg
+      className="block size-full"
+      fill="none"
+      preserveAspectRatio="none"
+      viewBox="0 0 22 22"
+    >
+      <path
+        d="M11 1.833C6.397 1.833 2.75 5.48 2.75 10.083C2.75 14.686 6.397 18.333 11 18.333C15.603 18.333 19.25 14.686 19.25 10.083C19.25 5.48 15.603 1.833 11 1.833Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+      <path
+        d="M8.25 11.5L10.25 13.5L14.75 9"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
-export function Sidebar({ activeMenu = 'chatbot', onMenuClick }: SidebarProps) {
+interface SidebarProps {
+  activeMenu?: "dashboard" | "chatbot" | "approval" | "settings";
+  onMenuClick?: (
+    menu: "dashboard" | "chatbot" | "approval" | "settings" | "logout"
+  ) => void;
+}
+
+export function Sidebar({ activeMenu = "chatbot", onMenuClick }: SidebarProps) {
   return (
     <div className="bg-white h-screen w-[240px] flex flex-col relative border-r border-[#E0E0E0]">
       {/* Logo */}
@@ -87,11 +133,11 @@ export function Sidebar({ activeMenu = 'chatbot', onMenuClick }: SidebarProps) {
         {/* Dashboard */}
         <button
           className={`w-full flex items-center gap-[12px] px-[37px] h-[51px] rounded-[6px] mb-[8px] transition-colors ${
-            activeMenu === 'dashboard'
-              ? 'bg-[#0072ff] text-white'
-              : 'text-[#202224] hover:bg-gray-50'
+            activeMenu === "dashboard"
+              ? "bg-[#0072ff] text-white"
+              : "text-[#202224] hover:bg-gray-50"
           }`}
-          onClick={() => onMenuClick?.('dashboard')}
+          onClick={() => onMenuClick?.("dashboard")}
         >
           <div className="size-[22px] shrink-0">
             <HomeIcon />
@@ -104,13 +150,13 @@ export function Sidebar({ activeMenu = 'chatbot', onMenuClick }: SidebarProps) {
         {/* AI Chatbot */}
         <button
           className={`w-full flex items-center gap-[12px] px-[37px] h-[51px] rounded-[6px] mb-[8px] transition-colors relative ${
-            activeMenu === 'chatbot'
-              ? 'bg-[#0072ff] text-white'
-              : 'text-[#202224] hover:bg-gray-50'
+            activeMenu === "chatbot"
+              ? "bg-[#0072ff] text-white"
+              : "text-[#202224] hover:bg-gray-50"
           }`}
-          onClick={() => onMenuClick?.('chatbot')}
+          onClick={() => onMenuClick?.("chatbot")}
         >
-          {activeMenu === 'chatbot' && (
+          {activeMenu === "chatbot" && (
             <div className="absolute left-0 top-0 bottom-0 w-[9px] bg-[#0072ff] rounded-r-[4px]" />
           )}
           <div className="size-[22px] shrink-0">
@@ -120,18 +166,34 @@ export function Sidebar({ activeMenu = 'chatbot', onMenuClick }: SidebarProps) {
             AI Chatbot
           </span>
         </button>
+        {/* Approval */}
+        <button
+          className={`w-full flex items-center gap-[12px] px-[37px] h-[51px] rounded-[6px] mb-[8px] transition-colors ${
+            activeMenu === "approval"
+              ? "bg-[#0072ff] text-white"
+              : "text-[#202224] hover:bg-gray-50"
+          }`}
+          onClick={() => onMenuClick?.("approval")}
+        >
+          <div className="size-[22px] shrink-0">
+            <ApprovalIcon />
+          </div>
+          <span className="font-poppins font-semibold text-[16px] tracking-[0.3px]">
+            Approval
+          </span>
+        </button>
 
-        {/* Divider */}
+          {/* Divider Line */}
         <div className="h-[0.6px] bg-[#E0E0E0] mx-[6px] my-[8px]" />
 
         {/* Settings */}
         <button
           className={`w-full flex items-center gap-[12px] px-[37px] h-[51px] rounded-[6px] mb-[8px] transition-colors ${
-            activeMenu === 'settings'
-              ? 'bg-[#0072ff] text-white'
-              : 'text-[#202224] hover:bg-gray-50'
+            activeMenu === "settings"
+              ? "bg-[#0072ff] text-white"
+              : "text-[#202224] hover:bg-gray-50"
           }`}
-          onClick={() => onMenuClick?.('settings')}
+          onClick={() => onMenuClick?.("settings")}
         >
           <div className="size-[22px] shrink-0">
             <SettingsIcon />
@@ -144,7 +206,7 @@ export function Sidebar({ activeMenu = 'chatbot', onMenuClick }: SidebarProps) {
         {/* Logout */}
         <button
           className="w-full flex items-center gap-[12px] px-[37px] h-[51px] rounded-[6px] text-[#202224] hover:bg-gray-50 transition-colors"
-          onClick={() => onMenuClick?.('logout')}
+          onClick={() => onMenuClick?.("logout")}
         >
           <div className="size-[22px] shrink-0">
             <LogoutIcon />

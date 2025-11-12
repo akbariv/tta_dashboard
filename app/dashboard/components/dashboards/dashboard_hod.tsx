@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   Card,
   Donut,
@@ -14,7 +15,6 @@ import {
   Pie,
   FilterDropdown,
 } from "@/app/dashboard/components/common";
-
 import {
   MOCK,
   getMonthlyTravelCost,
@@ -27,6 +27,7 @@ import {
   type Department,
   type PeriodKey,
 } from "@/app/dashboard/data/ttaMock";
+import { CountDownPill } from "../approval/approval_view";
 
 /* ================== HELPERS ================== */
 function daysLeft(dateISO: string) {
@@ -38,6 +39,25 @@ function daysLeft(dateISO: string) {
   if (d >= 1) return `${d} day${d > 1 ? "s" : ""} left`;
   const h = Math.ceil(diff / 3600_000);
   return `${h} hour${h > 1 ? "s" : ""} left`;
+}
+const sortByDeadlineAsc = (
+  a: { countdownISO: string },
+  b: { countdownISO: string }
+) => new Date(a.countdownISO).getTime() - new Date(b.countdownISO).getTime();
+
+function formatApprovalCountdown(iso: string) {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return { text: "Decision overdue", color: "bg-rose-400" };
+
+  const hours = Math.ceil(ms / 3_600_000);
+  if (hours <= 24) {
+    return { text: "Decision required within 24 hours", color: "bg-amber-400" };
+  }
+  const days = Math.ceil(hours / 24);
+  return {
+    text: `Approval due in ${days} day${days > 1 ? "s" : ""}`,
+    color: "bg-emerald-400",
+  };
 }
 
 /* ---------- SIMPLE CHARTS (SVG) ---------- */
@@ -280,6 +300,7 @@ export default function DashboardHOD() {
   // Filter dropdowns
   const [dept, setDept] = React.useState<string>("all");
   const [period, setPeriod] = React.useState<string>("2023-2025");
+  const router = useRouter();
 
   // Map UI -> tipe di mock
   const deptMap: Record<string, Department> = {
@@ -304,22 +325,34 @@ export default function DashboardHOD() {
   const approvalBooking = MOCK.approval.cards.booking;
 
   // Approval management table
-  const approvalMgmtRows = MOCK.approval.managementRows.map((r: any) => {
-    const now = Date.now();
-    const countdownISO = r.dueInHours
-      ? new Date(now + r.dueInHours * 3600_000).toISOString()
-      : r.dueInDays
-      ? new Date(now + r.dueInDays * 86400_000).toISOString()
-      : new Date(now + 24 * 3600_000).toISOString();
-    return {
-      id: r.id,
-      bookingId: r.bookingId ?? "-",
-      category: r.category,
-      requestor: r.requestor,
-      department: r.department,
-      countdownISO,
-    };
-  });
+  const approvalMgmtRows = MOCK.approval.managementRows
+    .map((r: any) => {
+      const now = Date.now();
+      const countdownISO = r.dueInHours
+        ? new Date(now + r.dueInHours * 3600_000).toISOString()
+        : r.dueInDays
+        ? new Date(now + r.dueInDays * 86400_000).toISOString()
+        : new Date(now + 24 * 3600_000).toISOString();
+
+      return {
+        id: r.id,
+        bookingId: r.bookingId ?? "-",
+        category: r.category,
+        requestor: r.requestor,
+        department: r.department,
+        countdownISO,
+      };
+    })
+    .sort(sortByDeadlineAsc) // <= konsisten urutan
+    .slice(0, 3); // <= hanya top 3
+
+  // urutkan berdasar deadline terdekat, ambil 3 teratas
+  const approvalMgmtRowsTop3 = [...approvalMgmtRows]
+    .sort(
+      (a, b) =>
+        new Date(a.countdownISO).getTime() - new Date(b.countdownISO).getTime()
+    )
+    .slice(0, 3);
 
   // My Request
   const myTravelReq = MOCK.myRequest.cards.travelRequest;
@@ -565,13 +598,16 @@ export default function DashboardHOD() {
           <div className="inline-flex items-center gap-2">
             <span>Approval Management</span>
             <span className="w-5 h-5 text-[11px] rounded-full bg-rose-500 text-white grid place-items-center">
-              2
+              {approvalMgmtRows.length}
             </span>
           </div>
         }
         right={<SearchInput placeholder="Search" size="sm" />}
         footer={
-          <button className="text-xs text-slate-600 hover:text-slate-900">
+          <button
+            onClick={() => router.push("/dashboard?section=approval")}
+            className="text-xs text-slate-600 hover:text-slate-900"
+          >
             More
           </button>
         }
@@ -579,32 +615,37 @@ export default function DashboardHOD() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-slate-500">
+              <tr className="text-center text-slate-500">
                 <th className="py-2">ID</th>
-                <th className="py-2">Booking ID</th>
                 <th className="py-2">Category</th>
                 <th className="py-2">Requestor</th>
-                <th className="py-2">Department</th>
+                <th className="py-2">Departement</th>
                 <th className="py-2">Approval Countdown</th>
                 <th className="py-2">Action</th>
               </tr>
             </thead>
+
             <tbody className="text-slate-700">
-              {approvalMgmtRows.map((r: any) => (
-                <tr key={r.id} className="border-t">
+              {approvalMgmtRowsTop3.map((r: any) => (
+                <tr key={r.id} className="border-t text-center">
                   <td className="py-2">{r.id}</td>
-                  <td className="py-2">{r.bookingId ?? "-"}</td>
                   <td className="py-2">{r.category}</td>
                   <td className="py-2">{r.requestor}</td>
                   <td className="py-2">{r.department}</td>
                   <td className="py-2">
-                    <span className="text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
+                    {/* <span className="text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
                       {daysLeft(r.countdownISO)}
-                    </span>
+                    </span> */}
+                    <CountDownPill
+                      targetISO={r.countdownISO}
+                      badge={r.countdownBadge}
+                    />
                   </td>
                   <td className="py-2">
-                    <div className="flex items-center gap-2">
-                      <DetailsButton label="Detail" />
+                    <div className="flex w-full items-center justify-end gap-2 pr-4">
+                      <button className="px-3 py-1 text-xs rounded bg-[#bdd5fd] text-[#1755b9] hover:bg-[#e0e4ec]">
+                        Detail
+                      </button>
                       <button className="px-3 py-1 text-xs rounded bg-[#3B82F6] text-white hover:bg-[#2563EB]">
                         Approve
                       </button>
