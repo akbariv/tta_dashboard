@@ -26,13 +26,17 @@ import {
   getActiveTripStacked,
   approvalManagement as APPROVAL_SRC,
   getPendingApprovals,
+  applyDecisionsToList,
   countByCategory,
   approvalDetailById,
   loadDecisionStore,
+  persistDecision,
+  DECISION_STORAGE_KEY,
   type ApprovalDetail,
   type Department,
   type PeriodKey,
 } from "@/app/dashboard/data/ttaMock";
+import RejectConfirmModal from "@/app/dashboard/components/approval/reject_confirm";
 import { CountDownPill } from "../approval/approval_view";
 
 /* ================== HELPERS ================== */
@@ -302,7 +306,7 @@ function GroupedBarChart({
 }
 
 // ======= APPROVAL HISTORY (ambil dari persist + join ke detail) =======
-const approvalHistoryRows = (() => {
+function buildApprovalHistoryRows() {
   const store = loadDecisionStore();
   return Object.entries(store)
     .map(([id, rec]) => {
@@ -310,13 +314,21 @@ const approvalHistoryRows = (() => {
         approvalDetailById as Record<string, ApprovalDetail | undefined>
       )[id];
       const base = APPROVAL_SRC.find((x) => x.id === id);
-      const category =
+      // derive category from available data; if missing, infer from id prefix
+      let category =
         base?.category ??
         (d?.kind === "travel"
           ? "Travel Request"
           : d?.kind === "claim"
           ? "Claim Request"
-          : "-");
+          : undefined);
+      if (!category) {
+        // common id patterns: TTA* -> Travel, C* -> Claim, BK* -> Booking
+        if (/^TTA/i.test(id)) category = "Travel Request";
+        else if (/^C/i.test(id)) category = "Claim Request";
+        else if (/^BK/i.test(id)) category = "Booking Changes";
+        else category = "-";
+      }
       return {
         id,
         category,
@@ -332,7 +344,7 @@ const approvalHistoryRows = (() => {
         new Date(b.approvalDateISO).getTime() -
         new Date(a.approvalDateISO).getTime()
     );
-})();
+}
 
 // const approvalHistoryRows = React.useMemo(() => {
 //   const store = loadDecisionStore();
@@ -394,23 +406,10 @@ export default function DashboardHOD() {
   const p: PeriodKey = periodMap[period] ?? "2023-2025";
 
   /* ======= DATA DARI MOCK ======= */
-  // Approval cards
-  // Approval cards (DINAMIS dari persist)
-  const travelSum = React.useMemo(
-    () => countByCategory("Travel Request", APPROVAL_SRC),
-    []
-  );
-  const claimSum = React.useMemo(
-    () => countByCategory("Claim Request", APPROVAL_SRC),
-    []
-  );
-  const approvalTravel = MOCK.approval.cards.travelRequest;
-  const approvalClaim = MOCK.approval.cards.claim;
-  const approvalBooking = MOCK.approval.cards.booking;
+  // Approval cards - we'll compute counts from both management rows and history (including persisted decisions)
 
-  // Approval management table
-  const approvalMgmtRows = React.useMemo(() => {
-    const src = getPendingApprovals(APPROVAL_SRC);
+  // Approval management table (kept in state so decisions update UI)
+  const buildMgmtRows = (src: any[]) => {
     const now = Date.now();
     return src
       .map((r: any) => {
@@ -431,15 +430,119 @@ export default function DashboardHOD() {
         };
       })
       .sort(sortByDeadlineAsc);
+  };
+
+  const [approvalMgmtRowsState, setApprovalMgmtRowsState] = React.useState(() =>
+    buildMgmtRows(getPendingApprovals(APPROVAL_SRC))
+  );
+
+  const approvalMgmtRowsTop3 = React.useMemo(() => {
+    return [...approvalMgmtRowsState]
+      .sort((a, b) => new Date(a.countdownISO).getTime() - new Date(b.countdownISO).getTime())
+      .slice(0, 3);
+  }, [approvalMgmtRowsState]);
+
+  function onApprove(id: string) {
+    try {
+      persistDecision(id, { status: "Approved", decisionDateISO: new Date().toISOString() });
+    } catch (e) {}
+    setApprovalMgmtRowsState((prev) => prev.filter((r) => r.id !== id));
+    // refresh history
+    setApprovalHistoryRowsState(buildApprovalHistoryRows());
+    // also rebuild pending rows from source to keep in sync
+    setApprovalMgmtRowsState(buildMgmtRows(getPendingApprovals(APPROVAL_SRC)));
+  }
+
+  // reject via confirm modal
+  const [rejectModalOpen, setRejectModalOpen] = React.useState(false);
+  const [rejectTargetId, setRejectTargetId] = React.useState<string | null>(null);
+
+  function requestReject(id: string) {
+    setRejectTargetId(id);
+    setRejectModalOpen(true);
+  }
+
+  function doReject(id: string, reason?: string) {
+    try {
+      persistDecision(id, { status: "Rejected", decisionDateISO: new Date().toISOString(), reason });
+    } catch (e) {}
+    setApprovalMgmtRowsState((prev) => prev.filter((r) => r.id !== id));
+    // refresh history
+    setApprovalHistoryRowsState(buildApprovalHistoryRows());
+    setApprovalMgmtRowsState(buildMgmtRows(getPendingApprovals(APPROVAL_SRC)));
+  }
+
+  // Listen to storage events so changes persisted from other components (ApprovalView) update this component
+  React.useEffect(() => {
+    function handleStorage(e: StorageEvent) {
+      // if decision store changed, refresh
+      if (!e.key || e.key === DECISION_STORAGE_KEY) {
+        setApprovalHistoryRowsState(buildApprovalHistoryRows());
+        setApprovalMgmtRowsState(buildMgmtRows(getPendingApprovals(APPROVAL_SRC)));
+      }
+    }
+    let handleCustom: ((e?: any) => void) | null = null;
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", handleStorage);
+      // same-window custom event (dispatched by persistDecision)
+      handleCustom = (_e?: any) => {
+        setApprovalHistoryRowsState(buildApprovalHistoryRows());
+        setApprovalMgmtRowsState(buildMgmtRows(getPendingApprovals(APPROVAL_SRC)));
+      };
+      window.addEventListener("tta:decision", handleCustom as EventListenerOrEventListenerObject);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("storage", handleStorage);
+        if (handleCustom) window.removeEventListener("tta:decision", handleCustom as EventListenerOrEventListenerObject);
+      }
+    };
   }, []);
 
-  // urutkan berdasar deadline terdekat, ambil 3 teratas
-  const approvalMgmtRowsTop3 = [...approvalMgmtRows]
-    .sort(
-      (a, b) =>
-        new Date(a.countdownISO).getTime() - new Date(b.countdownISO).getTime()
-    )
-    .slice(0, 3);
+  // Approval history state (so it updates when decisions are persisted)
+  const [approvalHistoryRowsState, setApprovalHistoryRowsState] = React.useState<
+    ReturnType<typeof buildApprovalHistoryRows>
+  >(buildApprovalHistoryRows);
+
+  // Combined approvals (management + history) with decisions applied from localStorage
+  const combinedApprovals = React.useMemo(() => {
+    // Build map keyed by id to avoid double-counting duplicates across sources.
+    // Order: base -> static history -> runtime history (later entries override earlier ones)
+    const map = new Map<string, { id: string; category: string; status: string }>();
+
+    const base = APPROVAL_SRC.map((x: any) => ({ id: x.id, category: x.category, status: x.status ?? "Pending" }));
+    for (const b of base) map.set(b.id, b);
+
+    const hist = (MOCK.approval.historyRows || []).map((h: any) => ({ id: h.id, category: h.category, status: h.status ?? "Approved" }));
+    for (const h of hist) map.set(h.id, h);
+
+    // runtime history reflects persisted decisions; let it override previous entries
+    const runtimeHist = (approvalHistoryRowsState || []).map((h: any) => ({ id: h.id, category: h.category, status: h.status }));
+    for (const r of runtimeHist) map.set(r.id, r);
+
+    const merged = Array.from(map.values());
+    // ensure persisted decisions are applied to resulting unique list
+    return applyDecisionsToList(merged as any) as Array<{ id: string; category: string; status: string }>;
+  }, [approvalHistoryRowsState]);
+
+  function countsFor(categoryMatcher: (cat: string) => boolean) {
+    let approved = 0,
+      pending = 0,
+      rejected = 0;
+    for (const r of combinedApprovals) {
+      if (!r || !r.category) continue;
+      if (!categoryMatcher(r.category)) continue;
+      if (r.status === "Approved") approved++;
+      else if (r.status === "Rejected") rejected++;
+      else pending++;
+    }
+    return { approved, pending, rejected };
+  }
+
+  const travelCounts = React.useMemo(() => countsFor((c) => c === "Travel Request"), [combinedApprovals]);
+  const claimCounts = React.useMemo(() => countsFor((c) => c === "Claim Request"), [combinedApprovals]);
+  // booking/category that contain 'booking' (case-insensitive)
+  const bookingCounts = React.useMemo(() => countsFor((c) => /booking/i.test(c)), [combinedApprovals]);
 
   // My Request
   const myTravelReq = MOCK.myRequest.cards.travelRequest;
@@ -563,36 +666,15 @@ export default function DashboardHOD() {
               thickness={14}
               bg="#ffffff"
               slices={[
-                {
-                  label: "Approved",
-                  value: approvalTravel.approved,
-                  color: "#3B82F6",
-                },
-                {
-                  label: "Pending",
-                  value: approvalTravel.pending,
-                  color: "#FACC15",
-                },
-                {
-                  label: "Rejected",
-                  value: approvalTravel.rejected,
-                  color: "#EF4444",
-                },
+                { label: "Approved", value: travelCounts.approved, color: "#3B82F6" },
+                { label: "Pending", value: travelCounts.pending, color: "#FACC15" },
+                { label: "Rejected", value: travelCounts.rejected, color: "#EF4444" },
               ]}
             />
             <div className="space-y-2">
-              <LegendItem
-                color="#3B82F6"
-                label={`${travelSum.approved} Approved`}
-              />
-              <LegendItem
-                color="#FACC15"
-                label={`${travelSum.pending} Pending`}
-              />
-              <LegendItem
-                color="#EF4444"
-                label={`${travelSum.rejected} Rejected`}
-              />
+              <LegendItem color="#3B82F6" label={`${travelCounts.approved} Approved`} />
+              <LegendItem color="#FACC15" label={`${travelCounts.pending} Pending`} />
+              <LegendItem color="#EF4444" label={`${travelCounts.rejected} Rejected`} />
             </div>
           </div>
         </Card>
@@ -604,36 +686,15 @@ export default function DashboardHOD() {
               thickness={14}
               bg="#ffffff"
               slices={[
-                {
-                  label: "Approved",
-                  value: approvalClaim.approved,
-                  color: "#3B82F6",
-                },
-                {
-                  label: "Pending",
-                  value: approvalClaim.pending,
-                  color: "#FACC15",
-                },
-                {
-                  label: "Rejected",
-                  value: approvalClaim.rejected,
-                  color: "#EF4444",
-                },
+                { label: "Approved", value: claimCounts.approved, color: "#3B82F6" },
+                { label: "Pending", value: claimCounts.pending, color: "#FACC15" },
+                { label: "Rejected", value: claimCounts.rejected, color: "#EF4444" },
               ]}
             />
             <div className="space-y-2">
-              <LegendItem
-                color="#3B82F6"
-                label={`${approvalClaim.approved} Approved`}
-              />
-              <LegendItem
-                color="#FACC15"
-                label={`${approvalClaim.pending} Pending`}
-              />
-              <LegendItem
-                color="#EF4444"
-                label={`${approvalClaim.rejected} Rejected`}
-              />
+              <LegendItem color="#3B82F6" label={`${claimCounts.approved} Approved`} />
+              <LegendItem color="#FACC15" label={`${claimCounts.pending} Pending`} />
+              <LegendItem color="#EF4444" label={`${claimCounts.rejected} Rejected`} />
             </div>
           </div>
         </Card>
@@ -645,36 +706,15 @@ export default function DashboardHOD() {
               thickness={14}
               bg="#ffffff"
               slices={[
-                {
-                  label: "Approved",
-                  value: approvalBooking.approved,
-                  color: "#3B82F6",
-                },
-                {
-                  label: "Pending",
-                  value: approvalBooking.pending,
-                  color: "#FACC15",
-                },
-                {
-                  label: "Rejected",
-                  value: approvalBooking.rejected,
-                  color: "#EF4444",
-                },
+                { label: "Approved", value: bookingCounts.approved, color: "#3B82F6" },
+                { label: "Pending", value: bookingCounts.pending, color: "#FACC15" },
+                { label: "Rejected", value: bookingCounts.rejected, color: "#EF4444" },
               ]}
             />
             <div className="space-y-2">
-              <LegendItem
-                color="#3B82F6"
-                label={`${approvalBooking.approved} Approved`}
-              />
-              <LegendItem
-                color="#FACC15"
-                label={`${approvalBooking.pending} Pending`}
-              />
-              <LegendItem
-                color="#EF4444"
-                label={`${approvalBooking.rejected} Rejected`}
-              />
+              <LegendItem color="#3B82F6" label={`${bookingCounts.approved} Approved`} />
+              <LegendItem color="#FACC15" label={`${bookingCounts.pending} Pending`} />
+              <LegendItem color="#EF4444" label={`${bookingCounts.rejected} Rejected`} />
             </div>
           </div>
         </Card>
@@ -684,8 +724,8 @@ export default function DashboardHOD() {
         title={
           <div className="inline-flex items-center gap-2">
             <span>Approval Management</span>
-            <span className="w-5 h-5 text-[11px] rounded-full bg-rose-500 text-white grid place-items-center">
-              {approvalMgmtRows.length}
+              <span className="w-5 h-5 text-[11px] rounded-full bg-rose-500 text-white grid place-items-center">
+              {approvalMgmtRowsState.length}
             </span>
           </div>
         }
@@ -730,13 +770,28 @@ export default function DashboardHOD() {
                   </td>
                   <td className="py-2">
                     <div className="flex w-full items-center justify-end gap-2 pr-4">
-                      <button className="px-3 py-1 text-xs rounded bg-[#bdd5fd] text-[#1755b9] hover:bg-[#e0e4ec]">
+                      <button
+                        onClick={() =>
+                          router.push(
+                            `/dashboard?section=approval&id=${encodeURIComponent(
+                              r.id
+                            )}`
+                          )
+                        }
+                        className="px-3 py-1 text-xs rounded bg-[#bdd5fd] text-[#1755b9] hover:bg-[#e0e4ec]"
+                      >
                         Detail
                       </button>
-                      <button className="px-3 py-1 text-xs rounded bg-[#3B82F6] text-white hover:bg-[#2563EB]">
+                      <button
+                        onClick={() => onApprove(r.id)}
+                        className="px-3 py-1 text-xs rounded bg-[#3B82F6] text-white hover:bg-[#2563EB]"
+                      >
                         Approve
                       </button>
-                      <button className="px-3 py-1 text-xs rounded bg-rose-100 text-rose-700 hover:bg-rose-200">
+                      <button
+                        onClick={() => requestReject(r.id)}
+                        className="px-3 py-1 text-xs rounded bg-rose-100 text-rose-700 hover:bg-rose-200"
+                      >
                         Reject
                       </button>
                     </div>
@@ -752,7 +807,10 @@ export default function DashboardHOD() {
         title="Approval History"
         right={<SearchInput placeholder="Search" size="sm" />}
         footer={
-          <button className="text-xs text-slate-600 hover:text-slate-900">
+          <button
+            onClick={() => router.push("/approval-history")}
+            className="text-xs text-slate-600 hover:text-slate-900"
+          >
             More
           </button>
         }
@@ -771,7 +829,7 @@ export default function DashboardHOD() {
               </tr>
             </thead>
             <tbody className="text-slate-700">
-              {approvalHistoryRows.length === 0 && (
+              {approvalHistoryRowsState.length === 0 && (
                 <tr className="border-t">
                   <td className="py-3" colSpan={9}>
                     <div className="text-center text-slate-500">No history</div>
@@ -779,7 +837,7 @@ export default function DashboardHOD() {
                 </tr>
               )}
 
-              {approvalHistoryRows.map((r) => (
+              {approvalHistoryRowsState.map((r) => (
                 <tr key={r.id} className="border-t">
                   <td className="py-2 text-center">{r.id}</td>
                   <td className="py-2 text-center">{r.category}</td>
@@ -804,13 +862,7 @@ export default function DashboardHOD() {
                   </td>
                   <td className="py-2 text-center">
                     <button
-                      onClick={() =>
-                        router.push(
-                          `/dashboard?section=approval&id=${encodeURIComponent(
-                            r.id
-                          )}`
-                        )
-                      }
+                      onClick={() => router.push(`/approval-history/${encodeURIComponent(r.id)}`)}
                       className="px-3 py-1 text-xs rounded bg-[#bdd5fd] text-[#1755b9] hover:bg-[#e0e4ec]"
                     >
                       Detail
@@ -1525,6 +1577,12 @@ export default function DashboardHOD() {
           Download Report
         </button>
       </div>
+      <RejectConfirmModal
+        open={rejectModalOpen}
+        onOpenChange={(v) => setRejectModalOpen(v)}
+        id={rejectTargetId}
+        onConfirm={(id, reason) => doReject(id, reason)}
+      />
     </div>
   );
 }

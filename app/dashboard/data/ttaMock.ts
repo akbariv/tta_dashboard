@@ -143,6 +143,31 @@ export const approvalManagement: ApprovalRow[] = [
     dueInDays: 2,
     countdownBadge: "Approval due in 2 days",
   },
+  // additional dummy management rows so UI shows more items across categories
+  {
+    id: "TTA005",
+    category: "Travel Request",
+    requestor: "Sari Amelia",
+    department: "TTA",
+    dueInDays: 1,
+    countdownBadge: "Approval due in 1 day",
+  },
+  {
+    id: "C2025-011",
+    category: "Claim Request",
+    requestor: "Dedi Kurnia",
+    department: "Finance",
+    dueInDays: 4,
+    countdownBadge: "Approval due in 4 days",
+  },
+  {
+    id: "BK2025-002",
+    category: "Booking Changes",
+    requestor: "Intan",
+    department: "HRD",
+    dueInDays: 2,
+    countdownBadge: "Approval due in 2 days",
+  },
 ];
 
 /* ========= APPROVAL (detail: discriminated union) ========= */
@@ -353,7 +378,45 @@ export const MOCK = {
     managementRows: approvalManagement,
     // untuk kompatibilitas dengan kode lama
     detailById: APPROVAL_DETAILS,
-    historyRows: [] as any[],
+    // dummy history rows (approved/rejected items across categories)
+    historyRows: [
+      {
+        id: "TTA001",
+        category: "Travel Request",
+        requestor: "Budi Santoso",
+        department: "TTA",
+        requestDateISO: "2025-09-20T00:00:00.000Z",
+        approvalDateISO: "2025-09-22T00:00:00.000Z",
+        status: "Approved",
+      },
+      {
+        id: "TTA002",
+        category: "Travel Request",
+        requestor: "Sinta Dewi",
+        department: "Finance",
+        requestDateISO: "2025-10-01T00:00:00.000Z",
+        approvalDateISO: "2025-10-03T00:00:00.000Z",
+        status: "Rejected",
+      },
+      {
+        id: "C2025-005",
+        category: "Claim Request",
+        requestor: "Joko",
+        department: "IT Governance",
+        requestDateISO: "2025-10-05T00:00:00.000Z",
+        approvalDateISO: "2025-10-07T00:00:00.000Z",
+        status: "Approved",
+      },
+      {
+        id: "BK2025-001",
+        category: "Booking Changes",
+        requestor: "Maya",
+        department: "HRD",
+        requestDateISO: "2025-10-12T00:00:00.000Z",
+        approvalDateISO: "2025-10-13T00:00:00.000Z",
+        status: "Approved",
+      },
+    ] as any[],
   },
   myRequest: {
     cards: {
@@ -505,7 +568,15 @@ export function loadDecisionStore(): Record<string, DecisionRecord> {
 export function persistDecision(id: string, rec: DecisionRecord) {
   const store = loadDecisionStore();
   store[id] = rec;
-  localStorage.setItem(DECISION_STORAGE_KEY, JSON.stringify(store));
+  try {
+    localStorage.setItem(DECISION_STORAGE_KEY, JSON.stringify(store));
+    // notify same-window listeners that a decision was persisted
+    try {
+      window.dispatchEvent(new CustomEvent("tta:decision", { detail: { id, rec } }));
+    } catch (e) {}
+  } catch (e) {
+    // ignore
+  }
 }
 
 /** utilities opsional */

@@ -9,6 +9,7 @@ import {
   persistDecision,         // <— pakai dari ttaMock
 } from "@/app/dashboard/data/ttaMock";
 import ApprovalDetailView from "@/app/dashboard/components/approval/approval_detail_view";
+import RejectConfirmModal from "@/app/dashboard/components/approval/reject_confirm";
 
 /* ---------------- Persist helpers (localStorage) ---------------- */
 // type DecisionStatus = "Approved" | "Rejected";
@@ -112,16 +113,31 @@ export default function ApprovalView({
 
   const selected = React.useMemo(() => data.find((x) => x.id === openId) ?? null, [data, openId]);
 
-  // ---------- DECIDE from LIST or from DETAIL (via onClose in detail view) ----------
- const onApprove = (id: string) => {
-  setData((prev) => prev.filter((r) => r.id !== id));
-  persistDecision(id, { status: "Approved", decisionDateISO: new Date().toISOString() });
-};
-const onReject = (id: string) => {
-  setData((prev) => prev.filter((r) => r.id !== id));
-  // kalau nanti bawa reason, tinggal persistDecision(id, { status: "Rejected", decisionDateISO: new Date().toISOString(), reason })
-  persistDecision(id, { status: "Rejected", decisionDateISO: new Date().toISOString() });
-};
+  // modal state for reject confirmation (list)
+  const [rejectModalOpen, setRejectModalOpen] = React.useState(false);
+  const [rejectTargetId, setRejectTargetId] = React.useState<string | null>(null);
+
+  // actual immediate actions
+  const doApprove = (id: string) => {
+    setData((prev) => prev.filter((r) => r.id !== id));
+    persistDecision(id, { status: "Approved", decisionDateISO: new Date().toISOString() });
+  };
+
+  const doReject = (id: string, reason?: string) => {
+    setData((prev) => prev.filter((r) => r.id !== id));
+    persistDecision(id, { status: "Rejected", decisionDateISO: new Date().toISOString(), reason });
+    // if detail is open for this id, close it
+    if (openId === id) {
+      setOpenId(null);
+      onCloseDetail?.();
+    }
+  };
+
+  // open confirm modal for given id
+  const requestReject = (id: string) => {
+    setRejectTargetId(id);
+    setRejectModalOpen(true);
+  };
 
 
   /* ---------- TAMPILAN DETAIL ---------- */
@@ -133,8 +149,8 @@ const onReject = (id: string) => {
           setOpenId(null);
           onCloseDetail?.();      // ← panggil callback untuk hapus ?id di URL
         }}
-        onApprove={onApprove}
-        onReject={onReject}
+        onApprove={doApprove}
+        onReject={(id: string) => requestReject(id)}
       />
     );
   }
@@ -210,10 +226,10 @@ const onReject = (id: string) => {
                       <button onClick={() => setOpenId(r.id)} className="px-3 py-1 text-xs rounded bg-[#bdd5fd] text-[#1755b9] hover:bg-[#e0e4ec]">
                         Detail
                       </button>
-                      <button onClick={() => onApprove(r.id)} className="px-3 py-1 text-xs rounded bg-[#3B82F6] text-white hover:bg-[#2563EB]">
+                      <button onClick={() => doApprove(r.id)} className="px-3 py-1 text-xs rounded bg-[#3B82F6] text-white hover:bg-[#2563EB]">
                         Approve
                       </button>
-                      <button onClick={() => onReject(r.id)} className="px-3 py-1 text-xs rounded bg-rose-100 text-rose-700 hover:bg-rose-200">
+                      <button onClick={() => requestReject(r.id)} className="px-3 py-1 text-xs rounded bg-rose-100 text-rose-700 hover:bg-rose-200">
                         Reject
                       </button>
                     </div>
@@ -231,6 +247,12 @@ const onReject = (id: string) => {
           </table>
         </div>
       </Card>
+      <RejectConfirmModal
+        open={rejectModalOpen}
+        onOpenChange={(v) => setRejectModalOpen(v)}
+        id={rejectTargetId}
+        onConfirm={(id, reason) => doReject(id, reason)}
+      />
     </div>
   );
 }

@@ -4,12 +4,14 @@
 import * as React from "react";
 import {
   approvalDetailById,
+  loadDecisionStore,
   type ApprovalDetail,
   type TravelApproval,
   type ClaimApproval,
 } from "@/app/dashboard/data/ttaMock";
 import TravelRequest from "./detailsection/travel_request";
 import ReimbursementRequest from "./detailsection/reimbursement_request";
+import RejectConfirmModal from "@/app/dashboard/components/approval/reject_confirm";
 
 type Row = {
   id: string;
@@ -62,6 +64,23 @@ export default function ApprovalDetailView(props: Props) {
           },
         };
 
+  // Merge any persisted decision (reason/decisionDateISO) from localStorage so
+  // details opened from Approval History or after a persisted decision show the reason.
+  try {
+    const store = loadDecisionStore();
+    const rec = store[props.row.id];
+    if (rec) {
+      initialTravel.approval = {
+        ...initialTravel.approval,
+        status: rec.status as any,
+        decisionDateISO: rec.decisionDateISO,
+        reason: rec.reason,
+      } as any;
+    }
+  } catch (e) {
+    // ignore failures reading localStorage in edge cases
+  }
+
   const [detail, setDetail] = React.useState<TravelApproval>(initialTravel);
   const [row, setRow] = React.useState<Row>(props.row);
 
@@ -83,19 +102,21 @@ export default function ApprovalDetailView(props: Props) {
     }));
     setRow(r => ({ ...r, status: "Approved" }));
   };
-
-  const rejectLocal = (id: string) => {
+  const rejectLocal = (id: string, reason?: string) => {
     setDetail(d => ({
       ...d,
       approval: {
         ...d.approval,
         status: "Rejected",
         decisionDateISO: new Date().toISOString(),
-        // reason sudah diisi di komponen detail (kalau ada)
+        reason,
       } as any,
     }));
     setRow(r => ({ ...r, status: "Rejected" }));
   };
+
+  // modal state for reject confirmation inside detail
+  const [rejectModalOpen, setRejectModalOpen] = React.useState(false);
 
   // === saat CLOSE: baru propagate ke parent agar baris di list DIHAPUS ===
   const handleClose = () => {
@@ -105,13 +126,27 @@ export default function ApprovalDetailView(props: Props) {
   };
 
   return (
-    <TravelRequest
-      row={row}
-      detail={detail}
-      onClose={handleClose}     // <— penting: close menghapus baris bila sudah decided
-      onApprove={approveLocal}  // <— tidak menutup halaman
-      onReject={rejectLocal}    // <— tidak menutup halaman
-    />
+    <>
+      <TravelRequest
+        row={row}
+        detail={detail}
+        onClose={handleClose}     // <— penting: close menghapus baris bila sudah decided
+        onApprove={approveLocal}  // <— tidak menutup halaman
+        onReject={() => setRejectModalOpen(true)}    // open confirm modal
+      />
+
+      <RejectConfirmModal
+        open={rejectModalOpen}
+        onOpenChange={(v) => setRejectModalOpen(v)}
+        id={row.id}
+        onConfirm={(id, reason) => {
+          // update local view, persist via parent, and close detail
+          rejectLocal(id, reason);
+          props.onReject(id);
+          props.onClose();
+        }}
+      />
+    </>
   );
 }
 
