@@ -5,6 +5,7 @@ import React, { useEffect, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { AppHeader } from "./components/appheader";
+import { resetAllDecisions } from "./data/ttaMock";
 import ChatbotView from "./components/chatbotview/chatbotview";
 import DashboardController from "./components/dashboards/dashboard_controller";
 import ApprovalView from "./components/approval/approval_view";
@@ -79,6 +80,15 @@ export default function DashboardPage() {
     } catch {}
     router.push("/");
   }
+  function handleResetDecisions() {
+    if (confirm("Reset all local approval decisions?")) {
+      try {
+        resetAllDecisions(); // hapus key 'tta_approval_decisions_v1'
+      } finally {
+        window.location.reload(); // segarkan UI agar list kembali ke Pending
+      }
+    }
+  }
 
   if (!user) return null;
 
@@ -113,7 +123,7 @@ export default function DashboardPage() {
           {activeMenu === "approval" && (
             <ApprovalView
               initialOpenId={openIdParam ?? null}
-              onCloseDetail={() => goToSection("approval", { id: null })} 
+              onCloseDetail={() => goToSection("approval", { id: null })}
             />
           )}
 
@@ -122,9 +132,13 @@ export default function DashboardPage() {
               <h2 className="text-2xl font-semibold text-gray-600">
                 Settings View
               </h2>
-              <p className="text-gray-500 mt-2">
-                Settings content coming soon...
-              </p>
+              <button
+                onClick={handleResetDecisions}
+                className="px-3 py-1.5 text-xs rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200"
+                title="Reset all approval decisions saved locally"
+              >
+                Reset local storage
+              </button>
             </div>
           )}
         </div>

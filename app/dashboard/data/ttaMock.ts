@@ -22,16 +22,16 @@ type ApprovalBase = {
     requestDateISO: string;
     deadlineISO: string;
     status: "Pending" | "Approved" | "Rejected";
-    decisionDateISO?: string;   
-    reason?: string;            
+    decisionDateISO?: string;
+    reason?: string;
   };
 };
-
 
 export type TravelApproval = ApprovalBase & {
   kind: "travel";
   travel: {
     requestId: string;
+    bookingId: string;
     type: "Moda Internal" | "Moda Eksternal";
     destination: string;
     departureDateISO: string;
@@ -67,6 +67,7 @@ const DEPT_MULT: Record<Department, number> = {
 
 export type ApprovalRow = {
   id: string;
+  bookingId: string;
   category: string;
   requestor: string;
   department: string;
@@ -123,6 +124,7 @@ export const approvalManagement: ApprovalRow[] = [
     id: "TTA003",
     category: "Travel Request",
     requestor: "Alice Key",
+    bookingId: "Book2025-331",
     department: "IT Governance",
     dueInHours: 24,
     countdownBadge: "Decision required within 24 hours",
@@ -131,6 +133,7 @@ export const approvalManagement: ApprovalRow[] = [
     id: "TTA004",
     category: "Travel Request",
     requestor: "Charles Muntz",
+    bookingId: "Book2025-310",
     department: "Karyawan",
     dueInDays: 3,
     countdownBadge: "Approval due in 3 days",
@@ -139,6 +142,7 @@ export const approvalManagement: ApprovalRow[] = [
     id: "C2025-010",
     category: "Claim Request",
     requestor: "Rudi",
+    bookingId: "Book2025-310",
     department: "IT Governance",
     dueInDays: 2,
     countdownBadge: "Approval due in 2 days",
@@ -148,6 +152,7 @@ export const approvalManagement: ApprovalRow[] = [
     id: "TTA005",
     category: "Travel Request",
     requestor: "Sari Amelia",
+    bookingId: "Book2025-512",
     department: "TTA",
     dueInDays: 1,
     countdownBadge: "Approval due in 1 day",
@@ -156,14 +161,16 @@ export const approvalManagement: ApprovalRow[] = [
     id: "C2025-011",
     category: "Claim Request",
     requestor: "Dedi Kurnia",
+    bookingId: "Book2025-418",
     department: "Finance",
     dueInDays: 4,
     countdownBadge: "Approval due in 4 days",
   },
   {
-    id: "BK2025-002",
+    id: "BC2025-002",
     category: "Booking Changes",
     requestor: "Intan",
+    bookingId: "Book2025-602",
     department: "HRD",
     dueInDays: 2,
     countdownBadge: "Approval due in 2 days",
@@ -183,6 +190,7 @@ export const APPROVAL_DETAILS: Record<string, ApprovalDetail> = {
       position: "Senior IT Governance Specialist",
     },
     travel: {
+      bookingId: "Book2025-331",
       requestId: "TTA003",
       type: "Moda Eksternal",
       destination: "Bandung",
@@ -208,6 +216,7 @@ export const APPROVAL_DETAILS: Record<string, ApprovalDetail> = {
       position: "Senior Marketing",
     },
     travel: {
+      bookingId: "Book2025-310",
       requestId: "TTA004",
       type: "Moda Eksternal",
       destination: "Semarang",
@@ -221,8 +230,70 @@ export const APPROVAL_DETAILS: Record<string, ApprovalDetail> = {
       status: "Pending",
     },
   },
+  // Travel: Sari Amelia
+  TTA005: {
+    id: "TTA005",
+    kind: "travel",
+    employee: {
+      name: "Sari Amelia",
+      id: "EMP-2025-071",
+      department: "TTA",
+      position: "Travel Admin",
+    },
+    travel: {
+      bookingId: "Book2025-512",
+      requestId: "TTA005",
+      type: "Moda Internal",
+      destination: "Surabaya",
+      departureDateISO: addDays(5),
+      transportation: "Pool Car",
+      estimatedCost: 150_000,
+    },
+    approval: {
+      requestDateISO: minusDays(1),
+      deadlineISO: addDays(1),
+      status: "Pending",
+    },
+  },
 
-  // Claim & Reimburse: Rudi
+  // Claim & Reimburse: Dedi Kurnia
+  "C2025-011": {
+    id: "C2025-011",
+    kind: "claim",
+    employee: {
+      name: "Dedi Kurnia",
+      id: "EMP-2025-062",
+      department: "Finance",
+      position: "Accounting Staff",
+    },
+    claim: {
+      claimId: "C2025-011",
+      bookingId: "Book2025-418",
+      requestId: "TTA004",
+      expenses: [
+        {
+          category: "Expense – Taxi",
+          description: "Airport transfer",
+          amount: 120_000,
+          attachment: "TaxiReceipt.pdf",
+        },
+        {
+          category: "Expense – Food",
+          description: "Dinner with client",
+          amount: 180_000,
+          attachment: "RestaurantInvoice.pdf",
+        },
+      ],
+    },
+    approval: {
+      requestDateISO: minusDays(3),
+      deadlineISO: addDays(4),
+      status: "Pending",
+    },
+  },
+
+  // Claim & Reimburse:
+  // Rudi
   "C2025-010": {
     id: "C2025-010",
     kind: "claim",
@@ -250,6 +321,31 @@ export const APPROVAL_DETAILS: Record<string, ApprovalDetail> = {
     approval: {
       requestDateISO: "2025-11-01T00:00:00.000Z",
       deadlineISO: "2025-11-05T00:00:00.000Z",
+      status: "Pending",
+    },
+  },
+  // Booking Changes: Intan
+  "BC2025-002": {
+    id: "BC2025-002",
+    kind: "travel", // sementara pakai UI TravelRequest agar langsung bisa tampil
+    employee: {
+      name: "Intan",
+      id: "EMP-2025-071",
+      department: "HRD",
+      position: "HR Specialist",
+    },
+    travel: {
+      bookingId: "Book2025-602",
+      requestId: "BK2025-002",
+      type: "Moda Eksternal",
+      destination: "Jakarta — Surabaya",
+      departureDateISO: addDays(10), // contoh jadwal berangkat
+      transportation: "Flight",
+      estimatedCost: 1_200_000,
+    },
+    approval: {
+      requestDateISO: minusDays(1),
+      deadlineISO: addDays(2), // sinkron dengan badge "Approval due in 2 days"
       status: "Pending",
     },
   },
@@ -496,17 +592,21 @@ export function getApprovalManagementPendingRows(
   base: ApprovalRow[] = approvalManagement
 ): ApprovalRow[] {
   const decided = loadDecisionStore();
-  return base.filter(r => !decided[r.id]); // yang sudah Approved/Rejected disembunyikan
+  return base.filter((r) => !decided[r.id]); // yang sudah Approved/Rejected disembunyikan
 }
 
 export function getCategorySummary(
-  list: Array<{ id: string; category: string; status?: "Pending"|"Approved"|"Rejected" }>
+  list: Array<{
+    id: string;
+    category: string;
+    status?: "Pending" | "Approved" | "Rejected";
+  }>
 ): Record<string, { approved: number; pending: number; rejected: number }> {
   const applied = applyDecisionsToList(list);
   return applied.reduce((acc, r) => {
     const k = r.category;
     if (!acc[k]) acc[k] = { approved: 0, pending: 0, rejected: 0 };
-    acc[k][r.status.toLowerCase() as "approved"|"pending"|"rejected"]++;
+    acc[k][r.status.toLowerCase() as "approved" | "pending" | "rejected"]++;
     return acc;
   }, {} as Record<string, { approved: number; pending: number; rejected: number }>);
 }
@@ -542,7 +642,6 @@ export function getActiveTripStacked(dept: Department = "All") {
   }));
 }
 
-
 /* ===================== PERSIST & SELECTORS (cross-page) ===================== */
 
 export type DecisionStatus = "Approved" | "Rejected";
@@ -572,7 +671,9 @@ export function persistDecision(id: string, rec: DecisionRecord) {
     localStorage.setItem(DECISION_STORAGE_KEY, JSON.stringify(store));
     // notify same-window listeners that a decision was persisted
     try {
-      window.dispatchEvent(new CustomEvent("tta:decision", { detail: { id, rec } }));
+      window.dispatchEvent(
+        new CustomEvent("tta:decision", { detail: { id, rec } })
+      );
     } catch (e) {}
   } catch (e) {
     // ignore
@@ -621,7 +722,9 @@ export function countByCategory(
     status?: "Pending" | "Approved" | "Rejected";
   }>
 ) {
-  const applied = applyDecisionsToList(list.filter((x) => x.category === category));
+  const applied = applyDecisionsToList(
+    list.filter((x) => x.category === category)
+  );
   let approved = 0,
     rejected = 0,
     pending = 0;

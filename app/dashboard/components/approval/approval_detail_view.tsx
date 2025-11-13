@@ -21,22 +21,32 @@ type Row = {
   status: "Pending" | "Approved" | "Rejected";
   countdownISO: string;
   countdownBadge?: string;
+  bookingId?: string;
 };
 
 type Props = {
   row: Row;
   onClose: () => void;
-  onApprove: (id: string) => void; // <- biarkan ada, tapi TIDAK kita panggil dulu
-  onReject: (id: string) => void;
+  onApprove: (id: string) => void;
+  onReject: (id: string, reason?: string) => void;
 };
 
 // ...imports & types tetap
 
 export default function ApprovalDetailView(props: Props) {
   const raw = approvalDetailById[props.row.id] as ApprovalDetail | undefined;
-  const isClaim = raw?.kind === "claim" || /claim/i.test(props.row.category);
 
-  // ==== TRAVEL path (pakai state lokal) ====
+  // robust claim detection
+  const isClaim =
+    (raw && raw.kind === "claim") ||
+    /claim/i.test(props.row.category) ||
+    props.row.id.startsWith("C");
+
+  // ====== STATE SHARED ======
+  const [row, setRow] = React.useState<Row>(props.row);
+  React.useEffect(() => setRow(props.row), [props.row.id]);
+
+  // ====== TRAVEL detail (and fallback) ======
   const initialTravel: TravelApproval =
     raw && raw.kind === "travel"
       ? (raw as TravelApproval)
@@ -51,6 +61,7 @@ export default function ApprovalDetailView(props: Props) {
           },
           travel: {
             requestId: props.row.id,
+            bookingId: props.row.bookingId ?? "—", // <-- wajib ada sekarang
             type: "Moda Eksternal",
             destination: "—",
             departureDateISO: props.row.countdownISO,
@@ -64,89 +75,174 @@ export default function ApprovalDetailView(props: Props) {
           },
         };
 
-  // Merge any persisted decision (reason/decisionDateISO) from localStorage so
-  // details opened from Approval History or after a persisted decision show the reason.
+  // ====== CLAIM detail (and fallback) ======
+  const initialClaim: ClaimApproval =
+    raw && raw.kind === "claim"
+      ? (raw as ClaimApproval)
+      : {
+          id: props.row.id,
+          kind: "claim",
+          employee: {
+            name: props.row.requestor,
+            id: "—",
+            department: props.row.department,
+            position: "—",
+          },
+          claim: {
+            claimId: props.row.id,
+            bookingId: props.row.bookingId ?? "—", // <-- ikutkan juga
+            requestId: "—",
+            expenses: [],
+          },
+          approval: {
+            requestDateISO: new Date().toISOString(),
+            deadlineISO: props.row.countdownISO,
+            status: props.row.status,
+          },
+        };
+
+  // ====== merge persisted decision (both types) ======
   try {
     const store = loadDecisionStore();
     const rec = store[props.row.id];
     if (rec) {
-      initialTravel.approval = {
+      (initialTravel.approval as any) = {
         ...initialTravel.approval,
-        status: rec.status as any,
+        status: rec.status,
         decisionDateISO: rec.decisionDateISO,
         reason: rec.reason,
-      } as any;
+      };
+      (initialClaim.approval as any) = {
+        ...initialClaim.approval,
+        status: rec.status,
+        decisionDateISO: rec.decisionDateISO,
+        reason: rec.reason,
+      };
     }
-  } catch (e) {
-    // ignore failures reading localStorage in edge cases
-  }
+  } catch {}
 
-  const [detail, setDetail] = React.useState<TravelApproval>(initialTravel);
-  const [row, setRow] = React.useState<Row>(props.row);
+  const [travelDetail, setTravelDetail] =
+    React.useState<TravelApproval>(initialTravel);
+  const [claimDetail, setClaimDetail] =
+    React.useState<ClaimApproval>(initialClaim);
+  const [decidedHere, setDecidedHere] = React.useState(false);
 
   React.useEffect(() => {
-    setDetail(initialTravel);
-    setRow(props.row);
+    setTravelDetail(initialTravel);
+    setClaimDetail(initialClaim);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.row.id]);
 
-  // === approve/reject LOKAL (tetap di halaman detail) ===
-  const approveLocal = (id: string) => {
-    setDetail(d => ({
-      ...d,
-      approval: {
-        ...d.approval,
-        status: "Approved",
-        decisionDateISO: new Date().toISOString(),
-      } as any,
-    }));
-    setRow(r => ({ ...r, status: "Approved" }));
-  };
-  const rejectLocal = (id: string, reason?: string) => {
-    setDetail(d => ({
-      ...d,
-      approval: {
-        ...d.approval,
-        status: "Rejected",
-        decisionDateISO: new Date().toISOString(),
-        reason,
-      } as any,
-    }));
-    setRow(r => ({ ...r, status: "Rejected" }));
+  // ====== local approve/reject (updates badge without leaving page) ======
+  const approveLocal = () => {
+    if (isClaim) {
+      setClaimDetail((d) => ({
+        ...d,
+        approval: {
+          ...(d.approval as any),
+          status: "Approved",
+          decisionDateISO: new Date().toISOString(),
+        } as any,
+      }));
+    } else {
+      setTravelDetail((d) => ({
+        ...d,
+        approval: {
+          ...(d.approval as any),
+          status: "Approved",
+          decisionDateISO: new Date().toISOString(),
+        } as any,
+      }));
+    }
+    setRow((r) => ({ ...r, status: "Approved" }));
   };
 
-  // modal state for reject confirmation inside detail
-  const [rejectModalOpen, setRejectModalOpen] = React.useState(false);
+  const rejectLocal = (reason?: string) => {
+    if (isClaim) {
+      setClaimDetail((d) => ({
+        ...d,
+        approval: {
+          ...(d.approval as any),
+          status: "Rejected",
+          decisionDateISO: new Date().toISOString(),
+          reason,
+        } as any,
+      }));
+    } else {
+      setTravelDetail((d) => ({
+        ...d,
+        approval: {
+          ...(d.approval as any),
+          status: "Rejected",
+          decisionDateISO: new Date().toISOString(),
+          reason,
+        } as any,
+      }));
+    }
+    setRow((r) => ({ ...r, status: "Rejected" }));
+  };
 
-  // === saat CLOSE: baru propagate ke parent agar baris di list DIHAPUS ===
+  // ====== close behavior (bubble to parent only when decided) ======
   const handleClose = () => {
+    if (decidedHere) {
+      props.onClose();
+      return;
+    }
     if (row.status === "Approved") props.onApprove(row.id);
     else if (row.status === "Rejected") props.onReject(row.id);
     props.onClose();
   };
 
+  const [rejectModalOpen, setRejectModalOpen] = React.useState(false);
+
+  // ====== RENDER: choose the correct detail UI ======
+  if (isClaim) {
+    return (
+      <>
+        <ReimbursementRequest
+          row={row}
+          detail={claimDetail}
+          onClose={handleClose}
+          onApprove={() => approveLocal()}
+          onReject={() => setRejectModalOpen(true)}
+        />
+        <RejectConfirmModal
+          open={rejectModalOpen}
+          onOpenChange={setRejectModalOpen}
+          id={row.id}
+          onConfirm={(_, reason) => {
+            rejectLocal(reason);
+            props.onReject(row.id, reason);
+            setDecidedHere(true);
+          }}
+        />
+      </>
+    );
+  }
+
+  // Travel UI
   return (
     <>
       <TravelRequest
         row={row}
-        detail={detail}
-        onClose={handleClose}     // <— penting: close menghapus baris bila sudah decided
-        onApprove={approveLocal}  // <— tidak menutup halaman
-        onReject={() => setRejectModalOpen(true)}    // open confirm modal
+        detail={travelDetail}
+        onClose={handleClose}
+        onApprove={() => approveLocal()}
+        onReject={(id, reason) => {
+          props.onReject(id, reason);
+          setDecidedHere(true);
+        }}
       />
-
       <RejectConfirmModal
         open={rejectModalOpen}
-        onOpenChange={(v) => setRejectModalOpen(v)}
+        onOpenChange={setRejectModalOpen}
         id={row.id}
-        onConfirm={(id, reason) => {
-          // update local view, persist via parent, and close detail
-          rejectLocal(id, reason);
-          props.onReject(id);
-          props.onClose();
+        onConfirm={(_, reason) => {
+          rejectLocal(reason);
+          props.onReject(row.id);
+          // props.onClose();
         }}
       />
     </>
   );
 }
-
