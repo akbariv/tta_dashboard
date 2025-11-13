@@ -14,6 +14,28 @@ export const DEPARTMENTS: Department[] = [
 
 type Emp = { name: string; id: string; department: string; position: string };
 
+export type StaffHistoryRow = {
+  id: string;
+  bookingId: string;
+  category: string;
+  requestor: string;
+  department: string;
+  requestDateISO: string;
+  approvalDateISO: string;
+  status: "Waiting User's Confirmation";
+};
+
+export type TravelOption = {
+  id: string;
+  label: string;
+  className: string;
+  departureTime: string;
+  arrivalTime: string;
+  departureStation: string;
+  destinationStation: string;
+  price: number;
+};
+
 type ApprovalBase = {
   id: string;
   kind: "travel" | "claim";
@@ -32,20 +54,20 @@ export type TravelApproval = ApprovalBase & {
   travel: {
     requestId: string;
     bookingId: string;
-    changeId?: string;           
+    changeId?: string;
     type: "Moda Internal" | "Moda Eksternal";
     destination: string;
-    initialDepartureDateISO?: string; 
-    rescheduleDepartureDateISO?: string; 
-    departureDateISO: string;    
+    initialDepartureDateISO?: string;
+    rescheduleDepartureDateISO?: string;
+    departureDateISO: string;
     transportation: string;
     estimatedCost: number;
-    extraCost?: number;  
-    refundAmount?: number; 
-    lossCost?: number;            
+    extraCost?: number;
+    refundAmount?: number;
+    lossCost?: number;
+    options?: TravelOption[];
   };
 };
-
 
 export type ClaimApproval = ApprovalBase & {
   kind: "claim";
@@ -183,7 +205,7 @@ export const approvalManagement: ApprovalRow[] = [
     countdownBadge: "Approval due in 2 days",
   },
 
-   {
+  {
     id: "BK2025-003",
     category: "Refund Request",
     requestor: "Alex Johnson",
@@ -214,10 +236,32 @@ export const APPROVAL_DETAILS: Record<string, ApprovalDetail> = {
       departureDateISO: "2025-11-18T00:00:00.000Z",
       transportation: "Whoosh",
       estimatedCost: 250_000,
+      options: [
+        {
+          id: "opt-1",
+          label: "Option 1",
+          className: "Premium Economic",
+          departureTime: "11:25 WIB",
+          arrivalTime: "12:02 WIB",
+          departureStation: "Halim",
+          destinationStation: "Padalarang",
+          price: 250_000,
+        },
+        {
+          id: "opt-2",
+          label: "Option 2",
+          className: "Premium Economic",
+          departureTime: "06:25 WIB",
+          arrivalTime: "07:02 WIB",
+          departureStation: "Halim",
+          destinationStation: "Padalarang",
+          price: 250_000,
+        },
+      ],
     },
     approval: {
       requestDateISO: "2025-10-25T00:00:00.000Z",
-      deadlineISO: addDays(1), // sinkron dengan badge "24 hours"
+      deadlineISO: addDays(1),
       status: "Pending",
     },
   },
@@ -240,6 +284,28 @@ export const APPROVAL_DETAILS: Record<string, ApprovalDetail> = {
       departureDateISO: addDays(7),
       transportation: "Bus",
       estimatedCost: 400_000,
+      options: [
+        {
+          id: "opt-1",
+          label: "Option 1",
+          className: "Economy",
+          departureTime: "08:00 WIB",
+          arrivalTime: "14:00 WIB",
+          departureStation: "Jakarta (Tanjung Priok)",
+          destinationStation: "Semarang (Terminal)",
+          price: 400_000,
+        },
+        {
+          id: "opt-2",
+          label: "Option 2",
+          className: "Economy",
+          departureTime: "09:30 WIB",
+          arrivalTime: "15:30 WIB",
+          departureStation: "Jakarta (Tanjung Priok)",
+          destinationStation: "Semarang (Terminal)",
+          price: 380_000,
+        },
+      ],
     },
     approval: {
       requestDateISO: minusDays(2),
@@ -247,6 +313,7 @@ export const APPROVAL_DETAILS: Record<string, ApprovalDetail> = {
       status: "Pending",
     },
   },
+
   // Travel: Sari Amelia
   TTA005: {
     id: "TTA005",
@@ -263,8 +330,30 @@ export const APPROVAL_DETAILS: Record<string, ApprovalDetail> = {
       type: "Moda Internal",
       destination: "Surabaya",
       departureDateISO: addDays(5),
-      transportation: "Pool Car",
-      estimatedCost: 150_000,
+      transportation: "Kereta API",
+      estimatedCost: 400_000,
+      options: [
+        {
+          id: "opt-1",
+          label: "Option 1",
+          className: "Economy",
+          departureTime: "08:00 WIB",
+          arrivalTime: "19:00 WIB",
+          departureStation: "Jakarta (Pasar Senen)",
+          destinationStation: "Surabaya (Gubeng)",
+          price: 400_000,
+        },
+        {
+          id: "opt-2",
+          label: "Option 2",
+          className: "Economy",
+          departureTime: "09:30 WIB",
+          arrivalTime: "20:30 WIB",
+          departureStation: "Jakarta (Pasar Senen)",
+          destinationStation: "Surabaya (Gubeng)",
+          price: 380_000,
+        },
+      ],
     },
     approval: {
       requestDateISO: minusDays(1),
@@ -342,64 +431,62 @@ export const APPROVAL_DETAILS: Record<string, ApprovalDetail> = {
     },
   },
   // Booking Changes: Intan
-"BC2025-002": {
-  id: "BC2025-002",
-  kind: "travel",
-  employee: {
-    name: "Intan",
-    id: "EMP-2025-071",
-    department: "HRD",
-    position: "HR Specialist",
+  "BC2025-002": {
+    id: "BC2025-002",
+    kind: "travel",
+    employee: {
+      name: "Intan",
+      id: "EMP-2025-071",
+      department: "HRD",
+      position: "HR Specialist",
+    },
+    travel: {
+      requestId: "BK2025-002",
+      bookingId: "Book2025-602",
+      changeId: "CH-BK2025-002",
+      type: "Moda Eksternal",
+      destination: "Jakarta — Surabaya",
+      initialDepartureDateISO: "2025-11-15T00:00:00.000Z",
+      rescheduleDepartureDateISO: "2025-11-20T00:00:00.000Z",
+      departureDateISO: "2025-11-20T00:00:00.000Z",
+      transportation: "Flight",
+      estimatedCost: 1_200_000,
+      extraCost: 0,
+    },
+    approval: {
+      requestDateISO: "2025-11-01T00:00:00.000Z",
+      deadlineISO: "2025-11-05T00:00:00.000Z",
+      status: "Pending",
+    },
   },
-  travel: {
-    requestId: "BK2025-002",
-    bookingId: "Book2025-602",
-    changeId: "CH-BK2025-002",              
-    type: "Moda Eksternal",
-    destination: "Jakarta — Surabaya",
-    initialDepartureDateISO: "2025-11-15T00:00:00.000Z",      
-    rescheduleDepartureDateISO: "2025-11-20T00:00:00.000Z",  
-    departureDateISO: "2025-11-20T00:00:00.000Z",            
-    transportation: "Flight",
-    estimatedCost: 1_200_000,
-    extraCost: 0,
-  },
-  approval: {
-    requestDateISO: "2025-11-01T00:00:00.000Z",
-    deadlineISO: "2025-11-05T00:00:00.000Z", 
-    status: "Pending",
-  },
-},
 
-"BK2025-003": {
-  id: "BK2025-003",
-  kind: "travel",
-  employee: {
-    name: "Alex Johnson",
-    id: "EMP-2025-034",
-    department: "IT",
-    position: "Senior IT Governance Specialist",
+  "BK2025-003": {
+    id: "BK2025-003",
+    kind: "travel",
+    employee: {
+      name: "Alex Johnson",
+      id: "EMP-2025-034",
+      department: "IT",
+      position: "Senior IT Governance Specialist",
+    },
+    travel: {
+      requestId: "TTA055",
+      bookingId: "Book2025-155",
+      changeId: "CH-TTA055",
+      type: "Moda Eksternal",
+      destination: "Bandung",
+      departureDateISO: "2025-11-18T00:00:00.000Z",
+      transportation: "Whoosh",
+      estimatedCost: 250_000,
+      refundAmount: 200_000,
+      lossCost: 250_000,
+    },
+    approval: {
+      requestDateISO: "2025-11-01T00:00:00.000Z",
+      deadlineISO: "2025-11-05T00:00:00.000Z",
+      status: "Pending", // nanti jadi Approved setelah di-approve
+    },
   },
-  travel: {
-    requestId: "TTA055",
-    bookingId: "Book2025-155",
-    changeId: "CH-TTA055",
-    type: "Moda Eksternal",
-    destination: "Bandung",
-    departureDateISO: "2025-11-18T00:00:00.000Z",
-    transportation: "Whoosh",
-    estimatedCost: 250_000,
-    refundAmount: 200_000,
-    lossCost: 250_000,
-  },
-  approval: {
-    requestDateISO: "2025-11-01T00:00:00.000Z",
-    deadlineISO: "2025-11-05T00:00:00.000Z",
-    status: "Pending", // nanti jadi Approved setelah di-approve
-  },
-},
-
-
 };
 
 export const approvalDetailById = APPROVAL_DETAILS;
@@ -786,3 +873,127 @@ export function countByCategory(
   }
   return { approved, pending, rejected };
 }
+
+// ===== Staff TTA notify store (Request Management -> Request History) =====
+export const STAFF_NOTIFY_STORAGE_KEY = "tta_staff_notify_v1";
+
+export type StaffNotifyRecord = {
+  notifiedDateISO: string;
+  selectedOptionId?: string | null;
+};
+
+export function loadStaffNotifyStore(): Record<string, StaffNotifyRecord> {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem(STAFF_NOTIFY_STORAGE_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+export function persistStaffNotify(id: string, rec: StaffNotifyRecord) {
+  const store = loadStaffNotifyStore();
+  store[id] = rec;
+  try {
+    localStorage.setItem(STAFF_NOTIFY_STORAGE_KEY, JSON.stringify(store));
+    try {
+      window.dispatchEvent(
+        new CustomEvent("tta:staff-notify", { detail: { id, rec } })
+      );
+    } catch (e) {}
+  } catch (e) {
+    // ignore
+  }
+}
+
+// ===================== STAFF TTA SELECTOR =====================
+
+// baris untuk Request Management di dashboard Staff TTA
+export type StaffRequestRow = {
+  id: string;
+  category: string;
+  requestor: string;
+  department: string;
+  requestDateISO: string;
+  approvalDateISO: string;
+  approvalStatus: "Approved" | "Pending" | "Rejected";
+  priority?: "Low" | "Medium" | "High";
+};
+
+/**
+ * Ambil semua request yang sudah di-APPROVE HoD,
+ * diproyeksikan untuk diproses oleh Staff TTA.
+ */
+export function getStaffRequestManagementRows(): StaffRequestRow[] {
+  const decided = loadDecisionStore();
+  const notified = loadStaffNotifyStore();
+
+  return approvalManagement
+    .filter((row) => decided[row.id]?.status === "Approved") 
+    .filter((row) => !notified[row.id]) 
+    .map((row) => {
+      const rec = decided[row.id]!;
+      const detail = approvalDetailById[row.id] as ApprovalDetail | undefined;
+
+      const requestDateISO =
+        detail?.approval?.requestDateISO ?? new Date().toISOString();
+
+ 
+      let priority: StaffRequestRow["priority"] = "Low";
+      if (row.dueInHours && row.dueInHours <= 24) {
+        priority = "High";
+      } else if (row.dueInDays && row.dueInDays <= 2) {
+        priority = "Medium";
+      }
+
+      return {
+        id: row.id,
+        category: row.category,
+        requestor: row.requestor,
+        department: row.department,
+        requestDateISO,
+        approvalDateISO: rec.decisionDateISO,
+        approvalStatus: rec.status, // pada filter di atas selalu "Approved"
+        priority,
+      };
+    });
+}
+
+export function getStaffRequestHistoryRows(): StaffHistoryRow[] {
+  const store = loadStaffNotifyStore();
+
+  return Object.entries(store).map(([id, rec]) => {
+    const baseRow = approvalManagement.find((r) => r.id === id);
+    const detail = approvalDetailById[id] as ApprovalDetail | undefined;
+
+    const requestDateISO =
+      detail?.approval?.requestDateISO ?? new Date().toISOString();
+
+    const bookingId =
+      detail && detail.kind === "travel"
+        ? detail.travel.bookingId
+        : detail && detail.kind === "claim"
+        ? detail.claim.bookingId
+        : baseRow?.bookingId ?? "-";
+
+    const category =
+      baseRow?.category ??
+      (detail?.kind === "travel" ? "Travel Request" : "Claim Request");
+
+    const requestor = baseRow?.requestor ?? detail?.employee.name ?? "—";
+    const department =
+      baseRow?.department ?? detail?.employee.department ?? "—";
+
+    return {
+      id,
+      bookingId,
+      category,
+      requestor,
+      department,
+      requestDateISO,
+      approvalDateISO: rec.notifiedDateISO,
+      status: "Waiting User's Confirmation",
+    };
+  });
+}
+

@@ -15,6 +15,13 @@ import {
   IDR,
   readBudget,
 } from "@/app/dashboard/components/common";
+import {
+  getStaffRequestManagementRows, persistStaffNotify,
+  type StaffRequestRow,
+} from "@/app/dashboard/data/ttaMock";
+import StaffTravelRequestDetail, {
+  MgmtRow,
+} from "@/app/dashboard/components/request/travel_request_detail";
 
 /* ================== DUMMY DATA (UI-ONLY) ================== */
 // Top: Travel Request
@@ -26,38 +33,6 @@ const internalTransportStatus = {
   inUse: 2,
   maintenance: 1,
 };
-
-// Request Management table
-type MgmtRow = {
-  id: string;
-  category: string;
-  requestor: string;
-  department: string;
-  requestDate: string;
-  approvalDate?: string;
-  approvalStatus: "Approved" | "Pending" | "Rejected";
-  priority?: "Low" | "Medium" | "High";
-};
-const requestManagementRows: MgmtRow[] = [
-  {
-    id: "TTA003",
-    category: "Travel Request",
-    requestor: "Alice Key",
-    department: "IT Governance",
-    requestDate: "2025-10-25",
-    approvalDate: "2025-10-30",
-    approvalStatus: "Approved",
-    priority: "High",
-  },
-  {
-    id: "Ch-TTA005",
-    category: "Change Request",
-    requestor: "Cedric",
-    department: "IT Operation",
-    requestDate: "2025-11-04",
-    approvalStatus: "Pending",
-  },
-];
 
 // Middle: My Request
 const myTravelReq = { approved: 6, pending: 2, rejected: 2 };
@@ -165,9 +140,52 @@ function daysLeft(dateISO: string) {
   return `${h} hour${h > 1 ? "s" : ""} left`;
 }
 
+// mapping StaffRequestRow → MgmtRow untuk kebutuhan detail view
+function toMgmtRow(row: StaffRequestRow): MgmtRow {
+  return {
+    ...(row as any),
+    // sesuaikan nama field tanggal ke yang dibutuhkan MgmtRow
+    requestDate: row.requestDateISO,
+    approvalDate: row.approvalDateISO,
+  } as MgmtRow;
+}
+
 /* ================== PAGE ================== */
 export default function DashboardStaffTTA() {
   const router = useRouter();
+
+  // NOTE: sekarang state pakai StaffRequestRow, bukan MgmtRow
+  const [selectedRow, setSelectedRow] = React.useState<StaffRequestRow | null>(
+    null
+  );
+
+  const [requestManagementRows, setRequestManagementRows] = React.useState<
+    StaffRequestRow[]
+  >([]);
+
+  // initial load dari ttaMock + localStorage
+  React.useEffect(() => {
+    setRequestManagementRows(getStaffRequestManagementRows());
+  }, []);
+
+  React.useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.rec) return;
+      if (detail.rec.status === "Approved") {
+        setRequestManagementRows(getStaffRequestManagementRows());
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("tta:decision", handler as any);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("tta:decision", handler as any);
+      }
+    };
+  }, []);
 
   // Budget sinkron (fallback 30jt / 20jt untuk demo)
   const [{ initial, used }, setBudget] = React.useState(
@@ -175,6 +193,7 @@ export default function DashboardStaffTTA() {
       ? { initial: 30_000_000, used: 20_000_000 }
       : readBudget() ?? { initial: 30_000_000, used: 20_000_000 }
   );
+
   React.useEffect(() => {
     const b = readBudget();
     if (b) setBudget(b);
@@ -185,6 +204,15 @@ export default function DashboardStaffTTA() {
   const loss = 5_000_000;
   const usedNet = Math.max(0, used - refunded - loss);
   const remaining = Math.max(0, initial - (usedNet + refunded + loss));
+
+  if (selectedRow) {
+    return (
+      <StaffTravelRequestDetail
+        row={toMgmtRow(selectedRow)}
+        onBack={() => setSelectedRow(null)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -318,7 +346,7 @@ export default function DashboardStaffTTA() {
           <div className="inline-flex items-center gap-2">
             <span>Request Management</span>
             <span className="w-5 h-5 text-[11px] rounded-full bg-rose-500 text-white grid place-items-center">
-              1
+              {requestManagementRows.length}
             </span>
           </div>
         }
@@ -352,20 +380,18 @@ export default function DashboardStaffTTA() {
                   <td className="py-2">{r.requestor}</td>
                   <td className="py-2">{r.department}</td>
                   <td className="py-2">
-                    {new Date(r.requestDate).toLocaleDateString("id-ID", {
+                    {new Date(r.requestDateISO).toLocaleDateString("id-ID", {
                       day: "2-digit",
                       month: "long",
                       year: "numeric",
                     })}
                   </td>
                   <td className="py-2">
-                    {r.approvalDate
-                      ? new Date(r.approvalDate).toLocaleDateString("id-ID", {
-                          day: "2-digit",
-                          month: "long",
-                          year: "numeric",
-                        })
-                      : "-"}
+                    {new Date(r.approvalDateISO).toLocaleDateString("id-ID", {
+                      day: "2-digit",
+                      month: "long",
+                      year: "numeric",
+                    })}
                   </td>
                   <td className="py-2">
                     <StatusBadge s={r.approvalStatus} />
@@ -374,10 +400,22 @@ export default function DashboardStaffTTA() {
                     {r.priority ? <PriorityBadge level={r.priority} /> : "-"}
                   </td>
                   <td className="py-2">
-                    <DetailsButton label="Detail" />
+                    <DetailsButton
+                      label="Detail"
+                      onClick={() => setSelectedRow(r)}
+                    />
                   </td>
                 </tr>
               ))}
+              {requestManagementRows.length === 0 && (
+                <tr className="border-t">
+                  <td className="py-3" colSpan={9}>
+                    <div className="text-center text-slate-500">
+                      No approved request yet
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
