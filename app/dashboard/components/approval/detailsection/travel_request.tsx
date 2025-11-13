@@ -22,6 +22,15 @@ type Props = {
   onReject: (id: string, reason?: string) => void;
 };
 
+type TravelWithChange = TravelApproval["travel"] & {
+  changeId?: string;
+  initialDepartureDateISO?: string;
+  rescheduleDepartureDateISO?: string;
+  extraCost?: number;
+  refundAmount?: number;
+  lossCost?: number;
+};
+
 /* ===== helpers ===== */
 function formatDateID(iso?: string) {
   if (!iso) return "—";
@@ -81,6 +90,23 @@ export default function TravelRequest({
   onApprove,
   onReject,
 }: Props) {
+  const travel = detail.travel as TravelWithChange;
+
+  // 🔽 Booking changes (reschedule / refund) detection
+  const isBookingChange =
+    row.category.toLowerCase().includes("booking") ||
+    row.category.toLowerCase().includes("change") ||
+    row.id.startsWith("BK") ||
+    row.id.startsWith("BC") ||
+    !!travel.changeId;
+
+  // 🔽 tipe khusus
+  const hasRescheduleInfo =
+    !!travel.initialDepartureDateISO || !!travel.rescheduleDepartureDateISO;
+  const hasCancelInfo =
+    typeof travel.refundAmount !== "undefined" ||
+    typeof travel.lossCost !== "undefined";
+
   const [status, setStatus] = React.useState<
     "Pending" | "Approved" | "Rejected"
   >(detail.approval.status);
@@ -100,20 +126,13 @@ export default function TravelRequest({
     setDecisionISO(new Date().toISOString());
     onApprove(row.id);
   };
+
   const [rejectOpen, setRejectOpen] = React.useState(false);
-
-
-  const statusBadgeClass = (s: "Pending" | "Approved" | "Rejected") =>
-    s === "Approved"
-      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-      : s === "Rejected"
-      ? "bg-rose-50 text-rose-700 border border-rose-200"
-      : "bg-amber-50 text-amber-700 border border-amber-200";
 
   return (
     <div className="space-y-4">
       <h1 className="text-[28px] font-semibold text-[#202224]">
-        History - Travel Approval Detail
+        {isBookingChange ? "Approval Detail" : "History - Travel Approval Detail"}
       </h1>
 
       <div className="relative rounded-2xl bg-white p-6 shadow-sm">
@@ -140,24 +159,70 @@ export default function TravelRequest({
 
         {/* Travel Request Information */}
         <Section title="Travel Request Information">
-          <RowItem label="Request ID">{detail.travel.requestId}</RowItem>
-          <RowItem label="Booking ID">{detail.travel.bookingId}</RowItem>
-          <RowItem label="Type">{detail.travel.type}</RowItem>
-          <RowItem label="Destination">{detail.travel.destination}</RowItem>
+          <RowItem label="Request ID">{travel.requestId}</RowItem>
+          <RowItem label="Booking ID">{travel.bookingId}</RowItem>
+
+          {isBookingChange && (
+            <RowItem label="Change ID">{travel.changeId ?? "—"}</RowItem>
+          )}
+
+          <RowItem label="Type">{travel.type}</RowItem>
+          <RowItem label="Destination">{travel.destination}</RowItem>
           <RowItem label="Departure Date">
-            {formatDateID(detail.travel.departureDateISO)}
+            {formatDateID(travel.departureDateISO)}
           </RowItem>
-          <RowItem label="Transportation">
-            {detail.travel.transportation}
-          </RowItem>
+          <RowItem label="Transportation">{travel.transportation}</RowItem>
           <RowItem label="Estimated Cost">
-            {(detail.travel.estimatedCost ?? 0).toLocaleString("id-ID", {
+            {(travel.estimatedCost ?? 0).toLocaleString("id-ID", {
               style: "currency",
               currency: "IDR",
               maximumFractionDigits: 0,
             })}
           </RowItem>
         </Section>
+
+        {/* 🔽 Reschedule Information (untuk kasus seperti Intan) */}
+        {hasRescheduleInfo && (
+          <Section title="Reschedule Information">
+            <RowItem label="Initial Departure Date">
+              {formatDateID(
+                travel.initialDepartureDateISO ?? travel.departureDateISO
+              )}
+            </RowItem>
+            <RowItem label="Reschedule Departure Date">
+              {formatDateID(
+                travel.rescheduleDepartureDateISO ?? travel.departureDateISO
+              )}
+            </RowItem>
+            <RowItem label="Extra Cost">
+              {(travel.extraCost ?? 0).toLocaleString("id-ID", {
+                style: "currency",
+                currency: "IDR",
+                maximumFractionDigits: 0,
+              })}
+            </RowItem>
+          </Section>
+        )}
+
+        {/* 🔽 Cancel Travel Information (untuk Refund seperti mockup) */}
+        {hasCancelInfo && (
+          <Section title="Cancel Travel Information">
+            <RowItem label="Refund Amount">
+              {(travel.refundAmount ?? 0).toLocaleString("id-ID", {
+                style: "currency",
+                currency: "IDR",
+                maximumFractionDigits: 0,
+              })}
+            </RowItem>
+            <RowItem label="Loss Cost">
+              {(travel.lossCost ?? 0).toLocaleString("id-ID", {
+                style: "currency",
+                currency: "IDR",
+                maximumFractionDigits: 0,
+              })}
+            </RowItem>
+          </Section>
+        )}
 
         {/* Approval Information */}
         <Section title="Approval Information">
@@ -170,13 +235,14 @@ export default function TravelRequest({
               {formatDateID(detail.approval.deadlineISO)}
             </RowItem>
           ) : status === "Approved" ? (
-            <RowItem label="Approval Date">{formatDateID(decisionISO)}</RowItem>
+            <RowItem label="Approval Date">
+              {formatDateID(decisionISO)}
+            </RowItem>
           ) : (
             <>
               <RowItem label="Approval Date">
                 {formatDateID(decisionISO)}
               </RowItem>
-              {/* BARIS REASON: muncul hanya saat Rejected */}
               <RowItem label="Reason">
                 {(detail as any).approval?.reason ?? "—"}
               </RowItem>
@@ -206,7 +272,7 @@ export default function TravelRequest({
             </button>
             <button
               type="button"
-              onClick={() => setRejectOpen(true)} // ⬅️ buka modal
+              onClick={() => setRejectOpen(true)}
               className="px-4 py-1.5 text-sm rounded-full bg-rose-100 text-rose-700 hover:bg-rose-200"
             >
               Reject
@@ -215,7 +281,7 @@ export default function TravelRequest({
         )}
       </div>
 
-      {/* ===== Modal Reject Reason ===== */}
+      {/* Modal Reject Reason */}
       <RejectConfirmModal
         open={rejectOpen}
         onOpenChange={setRejectOpen}

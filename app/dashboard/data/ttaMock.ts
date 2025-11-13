@@ -32,13 +32,20 @@ export type TravelApproval = ApprovalBase & {
   travel: {
     requestId: string;
     bookingId: string;
+    changeId?: string;           
     type: "Moda Internal" | "Moda Eksternal";
     destination: string;
-    departureDateISO: string;
+    initialDepartureDateISO?: string; 
+    rescheduleDepartureDateISO?: string; 
+    departureDateISO: string;    
     transportation: string;
     estimatedCost: number;
+    extraCost?: number;  
+    refundAmount?: number; 
+    lossCost?: number;            
   };
 };
+
 
 export type ClaimApproval = ApprovalBase & {
   kind: "claim";
@@ -174,6 +181,16 @@ export const approvalManagement: ApprovalRow[] = [
     department: "HRD",
     dueInDays: 2,
     countdownBadge: "Approval due in 2 days",
+  },
+
+   {
+    id: "BK2025-003",
+    category: "Refund Request",
+    requestor: "Alex Johnson",
+    bookingId: "Book2025-155",
+    department: "IT Governance",
+    dueInDays: 4,
+    countdownBadge: "Approval due in 4 days",
   },
 ];
 
@@ -325,30 +342,64 @@ export const APPROVAL_DETAILS: Record<string, ApprovalDetail> = {
     },
   },
   // Booking Changes: Intan
-  "BC2025-002": {
-    id: "BC2025-002",
-    kind: "travel", // sementara pakai UI TravelRequest agar langsung bisa tampil
-    employee: {
-      name: "Intan",
-      id: "EMP-2025-071",
-      department: "HRD",
-      position: "HR Specialist",
-    },
-    travel: {
-      bookingId: "Book2025-602",
-      requestId: "BK2025-002",
-      type: "Moda Eksternal",
-      destination: "Jakarta — Surabaya",
-      departureDateISO: addDays(10), // contoh jadwal berangkat
-      transportation: "Flight",
-      estimatedCost: 1_200_000,
-    },
-    approval: {
-      requestDateISO: minusDays(1),
-      deadlineISO: addDays(2), // sinkron dengan badge "Approval due in 2 days"
-      status: "Pending",
-    },
+"BC2025-002": {
+  id: "BC2025-002",
+  kind: "travel",
+  employee: {
+    name: "Intan",
+    id: "EMP-2025-071",
+    department: "HRD",
+    position: "HR Specialist",
   },
+  travel: {
+    requestId: "BK2025-002",
+    bookingId: "Book2025-602",
+    changeId: "CH-BK2025-002",              
+    type: "Moda Eksternal",
+    destination: "Jakarta — Surabaya",
+    initialDepartureDateISO: "2025-11-15T00:00:00.000Z",      
+    rescheduleDepartureDateISO: "2025-11-20T00:00:00.000Z",  
+    departureDateISO: "2025-11-20T00:00:00.000Z",            
+    transportation: "Flight",
+    estimatedCost: 1_200_000,
+    extraCost: 0,
+  },
+  approval: {
+    requestDateISO: "2025-11-01T00:00:00.000Z",
+    deadlineISO: "2025-11-05T00:00:00.000Z", 
+    status: "Pending",
+  },
+},
+
+"BK2025-003": {
+  id: "BK2025-003",
+  kind: "travel",
+  employee: {
+    name: "Alex Johnson",
+    id: "EMP-2025-034",
+    department: "IT",
+    position: "Senior IT Governance Specialist",
+  },
+  travel: {
+    requestId: "TTA055",
+    bookingId: "Book2025-155",
+    changeId: "CH-TTA055",
+    type: "Moda Eksternal",
+    destination: "Bandung",
+    departureDateISO: "2025-11-18T00:00:00.000Z",
+    transportation: "Whoosh",
+    estimatedCost: 250_000,
+    refundAmount: 200_000,
+    lossCost: 250_000,
+  },
+  approval: {
+    requestDateISO: "2025-11-01T00:00:00.000Z",
+    deadlineISO: "2025-11-05T00:00:00.000Z",
+    status: "Pending", // nanti jadi Approved setelah di-approve
+  },
+},
+
+
 };
 
 export const approvalDetailById = APPROVAL_DETAILS;
