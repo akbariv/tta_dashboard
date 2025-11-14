@@ -16,9 +16,13 @@ import {
   readBudget,
 } from "@/app/dashboard/components/common";
 import {
-  getStaffRequestManagementRows, persistStaffNotify,
+  getStaffRequestManagementRows,
+  getStaffRequestHistoryRows,
+  persistStaffNotify,
   type StaffRequestRow,
+  type StaffHistoryRow,
 } from "@/app/dashboard/data/ttaMock";
+
 import StaffTravelRequestDetail, {
   MgmtRow,
 } from "@/app/dashboard/components/request/travel_request_detail";
@@ -162,10 +166,13 @@ export default function DashboardStaffTTA() {
   const [requestManagementRows, setRequestManagementRows] = React.useState<
     StaffRequestRow[]
   >([]);
+  const [requestHistoryRows, setRequestHistoryRows] = React.useState<
+    StaffHistoryRow[]
+  >([]);
 
-  // initial load dari ttaMock + localStorage
   React.useEffect(() => {
     setRequestManagementRows(getStaffRequestManagementRows());
+    setRequestHistoryRows(getStaffRequestHistoryRows());
   }, []);
 
   React.useEffect(() => {
@@ -174,6 +181,7 @@ export default function DashboardStaffTTA() {
       if (!detail?.rec) return;
       if (detail.rec.status === "Approved") {
         setRequestManagementRows(getStaffRequestManagementRows());
+        setRequestHistoryRows(getStaffRequestHistoryRows());
       }
     };
 
@@ -205,11 +213,30 @@ export default function DashboardStaffTTA() {
   const usedNet = Math.max(0, used - refunded - loss);
   const remaining = Math.max(0, initial - (usedNet + refunded + loss));
 
+  const handleNotifyEmployee = (payload: {
+    id: string;
+    selectedOptionId: string | null;
+  }) => {
+    // 1. simpan ke localStorage
+    persistStaffNotify(payload.id, {
+      notifiedDateISO: new Date().toISOString(),
+      selectedOptionId: payload.selectedOptionId,
+    });
+
+    // 2. refresh kedua tabel dari mock
+    setRequestManagementRows(getStaffRequestManagementRows());
+    setRequestHistoryRows(getStaffRequestHistoryRows());
+
+    // 3. tutup detail
+    setSelectedRow(null);
+  };
+
   if (selectedRow) {
     return (
       <StaffTravelRequestDetail
         row={toMgmtRow(selectedRow)}
         onBack={() => setSelectedRow(null)}
+        onNotifyEmployee={handleNotifyEmployee}
       />
     );
   }
@@ -435,22 +462,60 @@ export default function DashboardStaffTTA() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-slate-500">
-                <th className="py-2">ID</th>
-                <th className="py-2">Booking ID</th>
-                <th className="py-2">Category</th>
-                <th className="py-2">Requestor</th>
-                <th className="py-2">Request Date</th>
-                <th className="py-2">Approval Date</th>
-                <th className="py-2">Status</th>
-                <th className="py-2">Action</th>
+                <th className="py-2 text-center">ID</th>
+                <th className="py-2 text-center">Booking ID</th>
+                <th className="py-2 text-center">Category</th>
+                <th className="py-2 text-center">Requestor</th>
+                <th className="py-2 text-center">Request Date</th>
+                <th className="py-2 text-center">Approval Date</th>
+                <th className="py-2 text-center">Status</th>
+                <th className="py-2 text-center">Action</th>
               </tr>
             </thead>
-            <tbody className="text-slate-500">
-              <tr className="border-t">
-                <td className="py-3" colSpan={8}>
-                  <div className="text-center">–</div>
-                </td>
-              </tr>
+            <tbody className="text-slate-700">
+              {requestHistoryRows.map((r) => (
+                <tr key={r.id} className="border-t">
+                  <td className="py-2 text-center">{r.id}</td>
+                  <td className="py-2 text-center">{r.bookingId}</td>
+                  <td className="py-2 text-center">{r.category}</td>
+                  <td className="py-2 text-center">{r.requestor}</td>
+                  <td className="py-2 text-center">
+                    {new Date(r.requestDateISO).toLocaleDateString("id-ID", {
+                      day: "2-digit",
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </td>
+                  <td className="py-2 text-center">
+                    {new Date(r.approvalDateISO).toLocaleDateString("id-ID", {
+                      day: "2-digit",
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </td>
+                  <td className="py-2 text-center">
+                    <span className="inline-flex items-center text-xs px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                      {r.status}
+                    </span>
+                  </td>
+                  <td className="py-2 text-center">
+                    <DetailsButton
+                      label="Detail"
+                      onClick={() => {
+                        // nanti kalau mau detail history, isi di sini
+                      }}
+                    />
+                  </td>
+                </tr>
+              ))}
+
+              {requestHistoryRows.length === 0 && (
+                <tr className="border-t">
+                  <td className="py-3" colSpan={8}>
+                    <div className="text-center text-slate-500">–</div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

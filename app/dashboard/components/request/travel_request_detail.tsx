@@ -22,7 +22,6 @@ export type MgmtRow = {
 type Props = {
   row: MgmtRow;
   onBack: () => void;
-  /** opsional: kalau mau mindahin data ke history di parent */
   onNotifyEmployee?: (payload: {
     id: string;
     selectedOptionId: string | null;

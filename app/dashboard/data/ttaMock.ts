@@ -825,8 +825,12 @@ export function clearDecision(id: string) {
   localStorage.setItem(DECISION_STORAGE_KEY, JSON.stringify(store));
 }
 export function resetAllDecisions() {
+  if (typeof window === "undefined") return;
+
   localStorage.removeItem(DECISION_STORAGE_KEY);
+  localStorage.removeItem(STAFF_NOTIFY_STORAGE_KEY);
 }
+
 
 /** override status dari base data dengan keputusan yang tersimpan */
 export function applyDecisionsToList<

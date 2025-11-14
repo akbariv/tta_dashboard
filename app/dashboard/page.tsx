@@ -9,6 +9,7 @@ import { resetAllDecisions } from "./data/ttaMock";
 import ChatbotView from "./components/chatbotview/chatbotview";
 import DashboardController from "./components/dashboards/dashboard_controller";
 import ApprovalView from "./components/approval/approval_view";
+import TravelRequestView from "./components/request/travel_request_view";
 
 type Section = "dashboard" | "chatbot" | "approval" | "settings";
 
@@ -92,6 +93,9 @@ export default function DashboardPage() {
 
   if (!user) return null;
 
+  const role = (user.role ?? "").toLowerCase();
+  const isStaffTta = role.includes("staff") && role.includes("tta");
+
   return (
     <div className="size-full flex bg-[#f5f6fa] min-h-screen">
       <Sidebar
@@ -120,12 +124,15 @@ export default function DashboardPage() {
           {activeMenu === "chatbot" && <ChatbotView autoplay />}
 
           {/* Kirim id (jika ada) supaya langsung buka detail */}
-          {activeMenu === "approval" && (
-            <ApprovalView
-              initialOpenId={openIdParam ?? null}
-              onCloseDetail={() => goToSection("approval", { id: null })}
-            />
-          )}
+          {activeMenu === "approval" &&
+            (isStaffTta ? (
+              <TravelRequestView />
+            ) : (
+              <ApprovalView
+                initialOpenId={openIdParam ?? null}
+                onCloseDetail={() => goToSection("approval", { id: null })}
+              />
+            ))}
 
           {activeMenu === "settings" && (
             <div className="text-center py-20">
