@@ -11,7 +11,6 @@ import {
   SearchInput,
   DetailsButton,
   PriorityBadge,
-  MapEmbed,
   IDR,
   readBudget,
 } from "@/app/dashboard/components/common";
@@ -26,6 +25,9 @@ import {
 import StaffTravelRequestDetail, {
   MgmtRow,
 } from "@/app/dashboard/components/request/travel_request_detail";
+
+import InternalTransportMap from "../internal_tracker/internal_transport_map";
+import type { TripStatus } from "../internal_tracker/internal_transport_map_inner";
 
 /* ================== DUMMY DATA (UI-ONLY) ================== */
 // Top: Travel Request
@@ -148,7 +150,6 @@ function daysLeft(dateISO: string) {
 function toMgmtRow(row: StaffRequestRow): MgmtRow {
   return {
     ...(row as any),
-    // sesuaikan nama field tanggal ke yang dibutuhkan MgmtRow
     requestDate: row.requestDateISO,
     approvalDate: row.approvalDateISO,
   } as MgmtRow;
@@ -157,6 +158,10 @@ function toMgmtRow(row: StaffRequestRow): MgmtRow {
 /* ================== PAGE ================== */
 export default function DashboardStaffTTA() {
   const router = useRouter();
+
+  // === STATE INTERNAL TRANSPORT ===
+  const [showInternalTrip, setShowInternalTrip] = React.useState(true); // dipakai map + button
+  const [tripStatus, setTripStatus] = React.useState<TripStatus>("OnTrip");
 
   // NOTE: sekarang state pakai StaffRequestRow, bukan MgmtRow
   const [selectedRow, setSelectedRow] = React.useState<StaffRequestRow | null>(
@@ -207,7 +212,6 @@ export default function DashboardStaffTTA() {
     if (b) setBudget(b);
   }, []);
 
-  // Breakdown demo mengikuti mockup
   const refunded = 5_000_000;
   const loss = 5_000_000;
   const usedNet = Math.max(0, used - refunded - loss);
@@ -217,17 +221,13 @@ export default function DashboardStaffTTA() {
     id: string;
     selectedOptionId: string | null;
   }) => {
-    // 1. simpan ke localStorage
     persistStaffNotify(payload.id, {
       notifiedDateISO: new Date().toISOString(),
       selectedOptionId: payload.selectedOptionId,
     });
 
-    // 2. refresh kedua tabel dari mock
     setRequestManagementRows(getStaffRequestManagementRows());
     setRequestHistoryRows(getStaffRequestHistoryRows());
-
-    // 3. tutup detail
     setSelectedRow(null);
   };
 
@@ -246,14 +246,14 @@ export default function DashboardStaffTTA() {
       {/* ====== SECTION: TRAVEL REQUEST ====== */}
       <div className="flex items-center justify-between">
         <SectionChip color="sky" label="Travel Request" />
-        <div className="hidden md:flex gap-2">
-          <select className="px-3 py-2 text-sm border rounded-lg">
+        <div className="hidden gap-2 md:flex">
+          <select className="rounded-lg border px-3 py-2 text-sm">
             <option>Period</option>
             <option>This Month</option>
             <option>This Quarter</option>
             <option>This Year</option>
           </select>
-          <select className="px-3 py-2 text-sm border rounded-lg">
+          <select className="rounded-lg border px-3 py-2 text-sm">
             <option>Category</option>
             <option>Travel</option>
             <option>Claims</option>
@@ -263,7 +263,7 @@ export default function DashboardStaffTTA() {
       </div>
 
       {/* Top donuts */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
         <Card title="Travel Request Summary">
           <div className="flex items-center gap-6">
             <Donut
@@ -372,7 +372,7 @@ export default function DashboardStaffTTA() {
         title={
           <div className="inline-flex items-center gap-2">
             <span>Request Management</span>
-            <span className="w-5 h-5 text-[11px] rounded-full bg-rose-500 text-white grid place-items-center">
+            <span className="grid h-5 w-5 place-items-center rounded-full bg-rose-500 text-[11px] text-white">
               {requestManagementRows.length}
             </span>
           </div>
@@ -448,7 +448,7 @@ export default function DashboardStaffTTA() {
         </div>
       </Card>
 
-      {/* Request History (kosong) */}
+      {/* Request History */}
       <Card
         title="Request History"
         right={<SearchInput placeholder="Search" size="sm" />}
@@ -494,7 +494,7 @@ export default function DashboardStaffTTA() {
                     })}
                   </td>
                   <td className="py-2 text-center">
-                    <span className="inline-flex items-center text-xs px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-700">
                       {r.status}
                     </span>
                   </td>
@@ -502,7 +502,7 @@ export default function DashboardStaffTTA() {
                     <DetailsButton
                       label="Detail"
                       onClick={() => {
-                        // nanti kalau mau detail history, isi di sini
+                        // detail history
                       }}
                     />
                   </td>
@@ -525,7 +525,7 @@ export default function DashboardStaffTTA() {
       <SectionChip color="emerald" label="My Request" />
 
       {/* donuts */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
         <Card title="Travel Request">
           <div className="flex items-center gap-6">
             <Donut
@@ -619,12 +619,12 @@ export default function DashboardStaffTTA() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {/* Travel Budget */}
         <Card
           title="Travel Budget"
           right={
-            <span className="text-xs px-2.5 py-1 rounded-full bg-sky-100 text-sky-700">
+            <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs text-sky-700">
               Initial Budget {IDR(initial)}
             </span>
           }
@@ -670,7 +670,7 @@ export default function DashboardStaffTTA() {
         <Card
           title={
             <span className="inline-flex items-center gap-2">
-              <img src="/icons/tracker_icons.svg" alt="" className="w-6 h-6" />
+              <img src="/icons/tracker_icons.svg" alt="" className="h-6 w-6" />
               <span>Active &amp; Upcoming Trips</span>
             </span>
           }
@@ -704,7 +704,7 @@ export default function DashboardStaffTTA() {
                       })}
                     </td>
                     <td className="py-2 text-right">
-                      <span className="text-xs px-2.5 py-1 rounded-full bg-rose-100 text-rose-700">
+                      <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs text-rose-700">
                         {daysLeft(r.date)}
                       </span>
                     </td>
@@ -717,11 +717,11 @@ export default function DashboardStaffTTA() {
       </div>
 
       {/* Trackers */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Card
           title={
             <span className="inline-flex items-center gap-2">
-              <img src="/icons/claim_card.svg" alt="" className="w-6 h-6" />
+              <img src="/icons/claim_card.svg" alt="" className="h-6 w-6" />
               <span>Claim &amp; Reimbursement Tracker</span>
             </span>
           }
@@ -766,7 +766,7 @@ export default function DashboardStaffTTA() {
         <Card
           title={
             <span className="inline-flex items-center gap-2">
-              <img src="/icons/tracker_icons.svg" alt="" className="w-6 h-6" />
+              <img src="/icons/tracker_icons.svg" alt="" className="h-6 w-6" />
               <span>Request Tracker</span>
             </span>
           }
@@ -812,32 +812,29 @@ export default function DashboardStaffTTA() {
       {/* ====== SECTION: INTERNAL TRANSPORTATION TRACKING ====== */}
       <SectionChip color="indigo" label="Internal Transportation Tracking" />
 
-      {/* Map embed */}
-      <Card title=" ">
-        <MapEmbed
-          bbox="106.70,-6.35,106.90,-6.05"
-          marker="-6.2,106.82"
-          height={520}
-        />
-      </Card>
+      {/* Map tracker – pakai showInternalTrip */}
+      <InternalTransportMap
+        showTrip={showInternalTrip}
+        status={tripStatus}
+        onStatusChange={setTripStatus}
+      />
 
-      {/* Internal Transportation Tracker table (kosong) */}
+      {/* Control table */}
       <Card
         title="Internal Transportation Tracker"
         right={
           <div className="flex items-center gap-2">
-            <select className="px-2.5 py-1.5 text-xs border rounded-lg">
-              <option>Depart…</option>
-              <option>Jakarta</option>
-              <option>Bandung</option>
+            <select className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 shadow-sm">
+              <option value="">Depart…</option>
+              <option value="IT Governance">IT Governance</option>
             </select>
-            <select className="px-2.5 py-1.5 text-xs border rounded-lg">
-              <option>Status…</option>
-              <option>Available</option>
-              <option>Reserved</option>
-              <option>In-Use</option>
-              <option>Maintenance</option>
+
+            <select className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 shadow-sm">
+              <option value="">Status…</option>
+              <option value="OnTrip">On-Trip</option>
+              <option value="Arrived">Arrived</option>
             </select>
+
             <SearchInput placeholder="Search" size="xs" />
           </div>
         }
@@ -859,14 +856,59 @@ export default function DashboardStaffTTA() {
                 <th className="py-2">Departure Date</th>
                 <th className="py-2">Start From</th>
                 <th className="py-2">To</th>
-                <th className="py-2">Status</th>
-                <th className="py-2">Action</th>
+                <th className="py-2 text-center">Status</th>
+                <th className="py-2 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="text-slate-500">
+
+            <tbody className="text-slate-700">
               <tr className="border-t">
-                <td className="py-3" colSpan={10}>
-                  <div className="text-center">–</div>
+                <td className="py-2">CAR-02</td>
+                <td className="py-2">TTA003</td>
+                <td className="py-2">Book2025-303</td>
+                <td className="py-2">Alicia Key</td>
+                <td className="py-2">IT Governance</td>
+                <td className="py-2">25 Oct 2025</td>
+                <td className="py-2">Head Office</td>
+                <td className="py-2">PIK Avenue</td>
+
+                {/* STATUS BADGE – sinkron dengan tripStatus */}
+                <td className="py-2 text-center">
+                  <span
+                    className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                      tripStatus === "Arrived"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {tripStatus === "Arrived" ? "Arrived" : "On-Trip"}
+                  </span>
+                </td>
+
+                {/* ACTION BUTTONS */}
+                <td className="py-2">
+                  <div className="flex items-center justify-end gap-2">
+                    <DetailsButton
+                      label="Detail"
+                      onClick={() => {
+                        console.log("open detail internal trip");
+                      }}
+                    />
+
+                    <button
+                      type="button"
+                      className={`rounded-lg px-3 py-1 text-xs font-semibold shadow-sm transition ${
+                        showInternalTrip
+                          ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                          : "bg-indigo-600 text-white hover:bg-indigo-700"
+                      }`}
+                      onClick={() =>
+                        setShowInternalTrip((prev) => !prev)
+                      }
+                    >
+                      {showInternalTrip ? "Hide" : "Show"}
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>
