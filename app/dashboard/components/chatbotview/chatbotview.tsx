@@ -45,12 +45,24 @@ export default function ChatbotView({
   const [input, setInput] = React.useState("");
   const [isTyping, setIsTyping] = React.useState(false);
   const [started, setStarted] = React.useState(false);
+
+  // ===== Claim / Reimburse flow =====
   type ClaimStage = "idle" | "choose" | "details";
   const [claimStage, setClaimStage] = React.useState<ClaimStage>("idle");
   const [claimType, setClaimType] = React.useState<
     "hotel" | "transportation" | "others" | null
   >(null);
 
+  // ===== Reschedule / Cancel flow =====
+  type RescheduleStage = "idle" | "yesNo" | "askId" | "reviseDetails";
+  const [rescheduleStage, setRescheduleStage] =
+    React.useState<RescheduleStage>("idle");
+  const [rescheduleId, setRescheduleId] = React.useState<string | null>(null);
+  const [rescheduleMode, setRescheduleMode] = React.useState<
+    "reschedule" | "cancel" | null
+  >(null);
+
+  // ===== Travel request (external) form flow =====
   const [awaitingExternalForm, setAwaitingExternalForm] = React.useState(false);
   const [awaitingConfirm, setAwaitingConfirm] = React.useState(false);
   const [lastExternalDraft, setLastExternalDraft] =
@@ -70,6 +82,11 @@ export default function ChatbotView({
     // reset state
     setClaimStage("idle");
     setClaimType(null);
+
+    setRescheduleStage("idle");
+    setRescheduleId(null);
+    setRescheduleMode(null);
+
     setAwaitingExternalForm(false);
     setAwaitingConfirm(false);
     setLastExternalDraft(null);
@@ -163,14 +180,32 @@ export default function ChatbotView({
       return prev.filter((p) => p.id !== id);
     });
   };
+
   const showClaimTypePrompt = async () => {
     await pushBotReplies([
       "Please select the type of claim/reimbursement you wish to submit:\n▪︎ Hotel\n▪︎ Transportation\n▪︎ Others",
     ]);
   };
+
   const showClaimDetailsPrompt = async () => {
     await pushBotReplies([
       "Please answer the question and upload supporting documents such as receipts, invoices, or purchase notes.\nNominal:\nDate:\nPurpose of Reimbursement:",
+    ]);
+  };
+
+  const startRescheduleFlow = async () => {
+    setRescheduleStage("yesNo");
+    setRescheduleId(null);
+    setRescheduleMode(null);
+    await pushBotReplies([
+      "Please answer the question in below about reschedule/cancel trip.\nDo you want to reschedule/cancel? (Yes/No)",
+    ]);
+  };
+
+  const askRescheduleId = async () => {
+    setRescheduleStage("askId");
+    await pushBotReplies([
+      'State the ID number you want to reschedule/cancel "ID - Reschedule/Cancel":\nExample: AAA555S - Reschedule',
     ]);
   };
 
@@ -240,7 +275,100 @@ export default function ChatbotView({
       return;
     }
 
-    // 3) Flow Claim/Reimburse (intent awal)
+    // 3) Reschedule / Cancel Trip flow
+    //    Step 1: answer Yes/No
+    if (rescheduleStage === "yesNo") {
+      if (/\b(yes|ya|y)\b/.test(t)) {
+        await askRescheduleId();
+      } else if (/\b(no|tidak|ga|gak|nggak|n)\b/.test(t)) {
+        await pushBotReplies([
+          "Okay, your current booking will remain unchanged.",
+        ]);
+        setRescheduleStage("idle");
+        setRescheduleId(null);
+        setRescheduleMode(null);
+        await askMainMenu(3000);
+      } else {
+        await pushBotReplies([
+          "Please answer with “Yes” if you want to reschedule/cancel, or “No” to keep your current booking.",
+        ]);
+      }
+      return;
+    }
+
+    //    Step 2: ask for ID + action
+    if (rescheduleStage === "askId") {
+      const idMatch = text.match(/[A-Za-z0-9]{4,}/);
+      const id = idMatch?.[0] ?? null;
+
+      if (!id) {
+        await pushBotReplies([
+          "Please type the booking ID you want to change, e.g. AAA555S - Reschedule",
+        ]);
+        return;
+      }
+
+      const mode: "reschedule" | "cancel" =
+        /\bcancel|batal\b/i.test(text) ? "cancel" : "reschedule";
+
+      setRescheduleId(id);
+      setRescheduleMode(mode);
+      setRescheduleStage("reviseDetails");
+
+      await pushBotReplies([
+        `ID received: ${id} (${
+          mode === "cancel" ? "Cancel Trip" : "Reschedule Trip"
+        }).`,
+        "Please revise the request in one message:\nDestination?\nDeparture Date?\nTransportation?\nEstimated Cost?",
+      ]);
+      return;
+    }
+
+    //    Step 3: user provides revised details
+    if (rescheduleStage === "reviseDetails") {
+      const parsed = parseExternalForm(text);
+      if (!parsed) {
+        await pushBotReplies([
+          "Please include the updated details in this format:\nDestination: <city>\nDeparture Date: <date>\nTransportation: <type>\nEstimated Cost: <amount>",
+        ]);
+        return;
+      }
+
+      const additional = parseMoney(parsed.cost);
+      if (additional > 0) {
+        setBudgetUsed((u) => Math.min(INITIAL_BUDGET, u + additional));
+      }
+
+      const modeLabel =
+        rescheduleMode === "cancel" ? "cancellation" : "reschedule";
+
+      await pushBotReplies([
+        "Check the available budget limit ...",
+        `The ${modeLabel} request for ID ${
+          rescheduleId ?? "-"
+        } has been sent to your superior.`,
+      ]);
+
+      setRescheduleStage("idle");
+      setRescheduleId(null);
+      setRescheduleMode(null);
+
+      await askMainMenu(3000);
+      return;
+    }
+
+    //    Entry point: user ketik niat booking change
+    if (
+      rescheduleStage === "idle" &&
+      /\b(booking change|booking changes|ubah booking|reschedule|cancel trip|cancel booking)\b/.test(
+        t
+      )
+    ) {
+      await startRescheduleFlow();
+      return;
+    }
+
+    // 4) Flow Claim/Reimburse (intent awal)
     if (
       /\b(reimburse|reimbursement|claim|klaim)\b/.test(t) &&
       claimStage === "idle"
@@ -251,24 +379,13 @@ export default function ChatbotView({
       return;
     }
 
-    // 4) Flow Travel Request (intent awal)
+    // 5) Flow Travel Request (intent awal)
     if (
       /\b(travel request|submit travel|pengajuan perjalanan|perjalanan dinas)\b/.test(
         t
       )
     ) {
       await ensureInitPrompt();
-      return;
-    }
-
-    // 5) Booking changes (belum tersedia)
-    if (
-      /\b(booking change|booking changes|ubah booking|reschedule)\b/.test(t)
-    ) {
-      await pushBotReplies([
-        "Booking changes flow is not implemented in this prototype yet.",
-      ]);
-      await askMainMenu(0);
       return;
     }
 
@@ -381,6 +498,10 @@ export default function ChatbotView({
       setClaimType(null);
       await showClaimTypePrompt();
     }
+    if (title === "Reschedule / Cancel Trip") {
+      await startRescheduleFlow();
+      return;
+    }
     if (title === "View Budget Summary") {
       await showBudgetSummary();
       return;
@@ -416,10 +537,7 @@ export default function ChatbotView({
       <div className="grid grid-cols-1 lg:grid-cols-[331px_minmax(0,1fr)] gap-6 mb-8">
         {/* Quick Actions */}
         <div className="w-full lg:w-[331px] bg-gradient-to-br from-white to-white/50 rounded-[14px] shadow-lg p-6">
-          {/* ... (tetap) map qaItems dengan onClick={handleQuickAction} */}
-          {/* isi Quick Actions tetap seperti sebelumnya */}
           <div className="flex items-center gap-2 mb-8">
-            {/* title */}
             <svg
               width="20"
               height="20"
