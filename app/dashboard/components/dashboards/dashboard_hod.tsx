@@ -38,6 +38,9 @@ import {
 } from "@/app/dashboard/data/ttaMock";
 import RejectConfirmModal from "@/app/dashboard/components/approval/reject_confirm";
 import { CountDownPill } from "../approval/approval_view";
+import InternalTransportMap from "../internal_tracker/internal_transport_map";
+import { TripStatus } from "../internal_tracker/internal_transport_map_inner";
+import InternalTransportDetail from "../internal_tracker/internal_transport_detail";
 
 /* ================== HELPERS ================== */
 function daysLeft(dateISO: string) {
@@ -387,7 +390,13 @@ export default function DashboardHOD() {
   // Filter dropdowns
   const [dept, setDept] = React.useState<string>("all");
   const [period, setPeriod] = React.useState<string>("2023-2025");
+  const [showInternalTrip, setShowInternalTrip] = React.useState(true);
+  const [tripStatus, setTripStatus] = React.useState<TripStatus>("OnTrip");
+  const [showInternalTripDetail, setShowInternalTripDetail] =
+    React.useState(false);
   const router = useRouter();
+
+ 
 
   // Map UI -> tipe di mock
   const deptMap: Record<string, Department> = {
@@ -438,13 +447,20 @@ export default function DashboardHOD() {
 
   const approvalMgmtRowsTop3 = React.useMemo(() => {
     return [...approvalMgmtRowsState]
-      .sort((a, b) => new Date(a.countdownISO).getTime() - new Date(b.countdownISO).getTime())
+      .sort(
+        (a, b) =>
+          new Date(a.countdownISO).getTime() -
+          new Date(b.countdownISO).getTime()
+      )
       .slice(0, 3);
   }, [approvalMgmtRowsState]);
 
   function onApprove(id: string) {
     try {
-      persistDecision(id, { status: "Approved", decisionDateISO: new Date().toISOString() });
+      persistDecision(id, {
+        status: "Approved",
+        decisionDateISO: new Date().toISOString(),
+      });
     } catch (e) {}
     setApprovalMgmtRowsState((prev) => prev.filter((r) => r.id !== id));
     // refresh history
@@ -455,7 +471,9 @@ export default function DashboardHOD() {
 
   // reject via confirm modal
   const [rejectModalOpen, setRejectModalOpen] = React.useState(false);
-  const [rejectTargetId, setRejectTargetId] = React.useState<string | null>(null);
+  const [rejectTargetId, setRejectTargetId] = React.useState<string | null>(
+    null
+  );
 
   function requestReject(id: string) {
     setRejectTargetId(id);
@@ -464,7 +482,11 @@ export default function DashboardHOD() {
 
   function doReject(id: string, reason?: string) {
     try {
-      persistDecision(id, { status: "Rejected", decisionDateISO: new Date().toISOString(), reason });
+      persistDecision(id, {
+        status: "Rejected",
+        decisionDateISO: new Date().toISOString(),
+        reason,
+      });
     } catch (e) {}
     setApprovalMgmtRowsState((prev) => prev.filter((r) => r.id !== id));
     // refresh history
@@ -478,7 +500,9 @@ export default function DashboardHOD() {
       // if decision store changed, refresh
       if (!e.key || e.key === DECISION_STORAGE_KEY) {
         setApprovalHistoryRowsState(buildApprovalHistoryRows());
-        setApprovalMgmtRowsState(buildMgmtRows(getPendingApprovals(APPROVAL_SRC)));
+        setApprovalMgmtRowsState(
+          buildMgmtRows(getPendingApprovals(APPROVAL_SRC))
+        );
       }
     }
     let handleCustom: ((e?: any) => void) | null = null;
@@ -487,42 +511,71 @@ export default function DashboardHOD() {
       // same-window custom event (dispatched by persistDecision)
       handleCustom = (_e?: any) => {
         setApprovalHistoryRowsState(buildApprovalHistoryRows());
-        setApprovalMgmtRowsState(buildMgmtRows(getPendingApprovals(APPROVAL_SRC)));
+        setApprovalMgmtRowsState(
+          buildMgmtRows(getPendingApprovals(APPROVAL_SRC))
+        );
       };
-      window.addEventListener("tta:decision", handleCustom as EventListenerOrEventListenerObject);
+      window.addEventListener(
+        "tta:decision",
+        handleCustom as EventListenerOrEventListenerObject
+      );
     }
     return () => {
       if (typeof window !== "undefined") {
         window.removeEventListener("storage", handleStorage);
-        if (handleCustom) window.removeEventListener("tta:decision", handleCustom as EventListenerOrEventListenerObject);
+        if (handleCustom)
+          window.removeEventListener(
+            "tta:decision",
+            handleCustom as EventListenerOrEventListenerObject
+          );
       }
     };
   }, []);
 
   // Approval history state (so it updates when decisions are persisted)
-  const [approvalHistoryRowsState, setApprovalHistoryRowsState] = React.useState<
-    ReturnType<typeof buildApprovalHistoryRows>
-  >(buildApprovalHistoryRows);
+  const [approvalHistoryRowsState, setApprovalHistoryRowsState] =
+    React.useState<ReturnType<typeof buildApprovalHistoryRows>>(
+      buildApprovalHistoryRows
+    );
 
   // Combined approvals (management + history) with decisions applied from localStorage
   const combinedApprovals = React.useMemo(() => {
     // Build map keyed by id to avoid double-counting duplicates across sources.
     // Order: base -> static history -> runtime history (later entries override earlier ones)
-    const map = new Map<string, { id: string; category: string; status: string }>();
+    const map = new Map<
+      string,
+      { id: string; category: string; status: string }
+    >();
 
-    const base = APPROVAL_SRC.map((x: any) => ({ id: x.id, category: x.category, status: x.status ?? "Pending" }));
+    const base = APPROVAL_SRC.map((x: any) => ({
+      id: x.id,
+      category: x.category,
+      status: x.status ?? "Pending",
+    }));
     for (const b of base) map.set(b.id, b);
 
-    const hist = (MOCK.approval.historyRows || []).map((h: any) => ({ id: h.id, category: h.category, status: h.status ?? "Approved" }));
+    const hist = (MOCK.approval.historyRows || []).map((h: any) => ({
+      id: h.id,
+      category: h.category,
+      status: h.status ?? "Approved",
+    }));
     for (const h of hist) map.set(h.id, h);
 
     // runtime history reflects persisted decisions; let it override previous entries
-    const runtimeHist = (approvalHistoryRowsState || []).map((h: any) => ({ id: h.id, category: h.category, status: h.status }));
+    const runtimeHist = (approvalHistoryRowsState || []).map((h: any) => ({
+      id: h.id,
+      category: h.category,
+      status: h.status,
+    }));
     for (const r of runtimeHist) map.set(r.id, r);
 
     const merged = Array.from(map.values());
     // ensure persisted decisions are applied to resulting unique list
-    return applyDecisionsToList(merged as any) as Array<{ id: string; category: string; status: string }>;
+    return applyDecisionsToList(merged as any) as Array<{
+      id: string;
+      category: string;
+      status: string;
+    }>;
   }, [approvalHistoryRowsState]);
 
   function countsFor(categoryMatcher: (cat: string) => boolean) {
@@ -539,10 +592,19 @@ export default function DashboardHOD() {
     return { approved, pending, rejected };
   }
 
-  const travelCounts = React.useMemo(() => countsFor((c) => c === "Travel Request"), [combinedApprovals]);
-  const claimCounts = React.useMemo(() => countsFor((c) => c === "Claim Request"), [combinedApprovals]);
+  const travelCounts = React.useMemo(
+    () => countsFor((c) => c === "Travel Request"),
+    [combinedApprovals]
+  );
+  const claimCounts = React.useMemo(
+    () => countsFor((c) => c === "Claim Request"),
+    [combinedApprovals]
+  );
   // booking/category that contain 'booking' (case-insensitive)
-  const bookingCounts = React.useMemo(() => countsFor((c) => /booking/i.test(c)), [combinedApprovals]);
+  const bookingCounts = React.useMemo(
+    () => countsFor((c) => /booking/i.test(c)),
+    [combinedApprovals]
+  );
 
   // My Request
   const myTravelReq = MOCK.myRequest.cards.travelRequest;
@@ -643,6 +705,14 @@ export default function DashboardHOD() {
   ];
 
   /* ================== UI ================== */
+  if (showInternalTripDetail) {
+  return (
+    <InternalTransportDetail
+      status={tripStatus}
+      onBack={() => setShowInternalTripDetail(false)}
+    />
+  );
+}
   return (
     <div className="space-y-6">
       {/* ====== SECTION: APPROVAL ====== */}
@@ -666,15 +736,36 @@ export default function DashboardHOD() {
               thickness={14}
               bg="#ffffff"
               slices={[
-                { label: "Approved", value: travelCounts.approved, color: "#3B82F6" },
-                { label: "Pending", value: travelCounts.pending, color: "#FACC15" },
-                { label: "Rejected", value: travelCounts.rejected, color: "#EF4444" },
+                {
+                  label: "Approved",
+                  value: travelCounts.approved,
+                  color: "#3B82F6",
+                },
+                {
+                  label: "Pending",
+                  value: travelCounts.pending,
+                  color: "#FACC15",
+                },
+                {
+                  label: "Rejected",
+                  value: travelCounts.rejected,
+                  color: "#EF4444",
+                },
               ]}
             />
             <div className="space-y-2">
-              <LegendItem color="#3B82F6" label={`${travelCounts.approved} Approved`} />
-              <LegendItem color="#FACC15" label={`${travelCounts.pending} Pending`} />
-              <LegendItem color="#EF4444" label={`${travelCounts.rejected} Rejected`} />
+              <LegendItem
+                color="#3B82F6"
+                label={`${travelCounts.approved} Approved`}
+              />
+              <LegendItem
+                color="#FACC15"
+                label={`${travelCounts.pending} Pending`}
+              />
+              <LegendItem
+                color="#EF4444"
+                label={`${travelCounts.rejected} Rejected`}
+              />
             </div>
           </div>
         </Card>
@@ -686,15 +777,36 @@ export default function DashboardHOD() {
               thickness={14}
               bg="#ffffff"
               slices={[
-                { label: "Approved", value: claimCounts.approved, color: "#3B82F6" },
-                { label: "Pending", value: claimCounts.pending, color: "#FACC15" },
-                { label: "Rejected", value: claimCounts.rejected, color: "#EF4444" },
+                {
+                  label: "Approved",
+                  value: claimCounts.approved,
+                  color: "#3B82F6",
+                },
+                {
+                  label: "Pending",
+                  value: claimCounts.pending,
+                  color: "#FACC15",
+                },
+                {
+                  label: "Rejected",
+                  value: claimCounts.rejected,
+                  color: "#EF4444",
+                },
               ]}
             />
             <div className="space-y-2">
-              <LegendItem color="#3B82F6" label={`${claimCounts.approved} Approved`} />
-              <LegendItem color="#FACC15" label={`${claimCounts.pending} Pending`} />
-              <LegendItem color="#EF4444" label={`${claimCounts.rejected} Rejected`} />
+              <LegendItem
+                color="#3B82F6"
+                label={`${claimCounts.approved} Approved`}
+              />
+              <LegendItem
+                color="#FACC15"
+                label={`${claimCounts.pending} Pending`}
+              />
+              <LegendItem
+                color="#EF4444"
+                label={`${claimCounts.rejected} Rejected`}
+              />
             </div>
           </div>
         </Card>
@@ -706,15 +818,36 @@ export default function DashboardHOD() {
               thickness={14}
               bg="#ffffff"
               slices={[
-                { label: "Approved", value: bookingCounts.approved, color: "#3B82F6" },
-                { label: "Pending", value: bookingCounts.pending, color: "#FACC15" },
-                { label: "Rejected", value: bookingCounts.rejected, color: "#EF4444" },
+                {
+                  label: "Approved",
+                  value: bookingCounts.approved,
+                  color: "#3B82F6",
+                },
+                {
+                  label: "Pending",
+                  value: bookingCounts.pending,
+                  color: "#FACC15",
+                },
+                {
+                  label: "Rejected",
+                  value: bookingCounts.rejected,
+                  color: "#EF4444",
+                },
               ]}
             />
             <div className="space-y-2">
-              <LegendItem color="#3B82F6" label={`${bookingCounts.approved} Approved`} />
-              <LegendItem color="#FACC15" label={`${bookingCounts.pending} Pending`} />
-              <LegendItem color="#EF4444" label={`${bookingCounts.rejected} Rejected`} />
+              <LegendItem
+                color="#3B82F6"
+                label={`${bookingCounts.approved} Approved`}
+              />
+              <LegendItem
+                color="#FACC15"
+                label={`${bookingCounts.pending} Pending`}
+              />
+              <LegendItem
+                color="#EF4444"
+                label={`${bookingCounts.rejected} Rejected`}
+              />
             </div>
           </div>
         </Card>
@@ -724,7 +857,7 @@ export default function DashboardHOD() {
         title={
           <div className="inline-flex items-center gap-2">
             <span>Approval Management</span>
-              <span className="w-5 h-5 text-[11px] rounded-full bg-rose-500 text-white grid place-items-center">
+            <span className="w-5 h-5 text-[11px] rounded-full bg-rose-500 text-white grid place-items-center">
               {approvalMgmtRowsState.length}
             </span>
           </div>
@@ -862,7 +995,11 @@ export default function DashboardHOD() {
                   </td>
                   <td className="py-2 text-center">
                     <button
-                      onClick={() => router.push(`/approval-history/${encodeURIComponent(r.id)}`)}
+                      onClick={() =>
+                        router.push(
+                          `/approval-history/${encodeURIComponent(r.id)}`
+                        )
+                      }
                       className="px-3 py-1 text-xs rounded bg-[#bdd5fd] text-[#1755b9] hover:bg-[#e0e4ec]"
                     >
                       Detail
@@ -1191,29 +1328,28 @@ export default function DashboardHOD() {
 
       {/* ====== SECTION: INTERNAL TRANSPORTATION TRACKING ====== */}
       <SectionChip color="indigo" label="Internal Transportation Tracking" />
-      <Card title=" ">
-        <MapEmbed
-          bbox="106.70,-6.35,106.90,-6.05"
-          marker="-6.2,106.82"
-          height={520}
-        />
-      </Card>
+      <InternalTransportMap
+        showTrip={showInternalTrip}
+        status={tripStatus}
+        onStatusChange={setTripStatus}
+      />
 
       <Card
         title="Internal Transportation Tracker"
         right={
           <div className="flex items-center gap-2">
-            <select className="px-2.5 py-1.5 text-xs border rounded-lg">
-              <option>Depart…</option>
+            <select className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 shadow-sm">
+              <option value="">Depart…</option>
+              <option value="IT Governance">IT Governance</option>
             </select>
-            <select className="px-2.5 py-1.5 text-xs border rounded-lg">
-              <option>Status…</option>
-              <option>Available</option>
-              <option>Reserved</option>
-              <option>In-Use</option>
-              <option>Maintenance</option>
+
+            <select className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 shadow-sm">
+              <option value="">Status…</option>
+              <option value="OnTrip">On-Trip</option>
+              <option value="Arrived">Arrived</option>
             </select>
-            <SearchInput placeholder="Search" size="sm" />
+
+            <SearchInput placeholder="Search" size="xs" />
           </div>
         }
         footer={
@@ -1230,18 +1366,59 @@ export default function DashboardHOD() {
                 <th className="py-2">Request ID</th>
                 <th className="py-2">Booking ID</th>
                 <th className="py-2">Requestor</th>
-                <th className="py-2">Department</th>
+                <th className="py-2">Departement</th>
                 <th className="py-2">Departure Date</th>
                 <th className="py-2">Start From</th>
                 <th className="py-2">To</th>
-                <th className="py-2">Status</th>
-                <th className="py-2">Action</th>
+                <th className="py-2 text-center">Status</th>
+                <th className="py-2 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="text-slate-500">
+
+            <tbody className="text-slate-700">
               <tr className="border-t">
-                <td className="py-3" colSpan={10}>
-                  <div className="text-center">–</div>
+                <td className="py-2">CAR-02</td>
+                <td className="py-2">TTA003</td>
+                <td className="py-2">Book2025-303</td>
+                <td className="py-2">Alicia Key</td>
+                <td className="py-2">IT Governance</td>
+                <td className="py-2">25 Oct 2025</td>
+                <td className="py-2">Head Office</td>
+                <td className="py-2">PIK Avenue</td>
+
+                {/* STATUS BADGE – sinkron dengan tripStatus */}
+                <td className="py-2 text-center">
+                  <span
+                    className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                      tripStatus === "Arrived"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {tripStatus === "Arrived" ? "Arrived" : "On-Trip"}
+                  </span>
+                </td>
+
+                {/* ACTION BUTTONS */}
+                <td className="py-2">
+                  <div className="flex items-center justify-end gap-2">
+                    <DetailsButton
+                      label="Detail"
+                      onClick={() => setShowInternalTripDetail(true)}
+                    />
+
+                    <button
+                      type="button"
+                      className={`rounded-lg px-3 py-1 text-xs font-semibold shadow-sm transition ${
+                        showInternalTrip
+                          ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                          : "bg-indigo-600 text-white hover:bg-indigo-700"
+                      }`}
+                      onClick={() => setShowInternalTrip((prev) => !prev)}
+                    >
+                      {showInternalTrip ? "Hide" : "Show"}
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>

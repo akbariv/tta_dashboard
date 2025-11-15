@@ -27,6 +27,7 @@ import StaffTravelRequestDetail, {
 } from "@/app/dashboard/components/request/travel_request_detail";
 
 import InternalTransportMap from "../internal_tracker/internal_transport_map";
+import InternalTransportDetail from "../internal_tracker/internal_transport_detail";
 import type { TripStatus } from "../internal_tracker/internal_transport_map_inner";
 
 /* ================== DUMMY DATA (UI-ONLY) ================== */
@@ -160,8 +161,10 @@ export default function DashboardStaffTTA() {
   const router = useRouter();
 
   // === STATE INTERNAL TRANSPORT ===
-  const [showInternalTrip, setShowInternalTrip] = React.useState(true); // dipakai map + button
+  const [showInternalTrip, setShowInternalTrip] = React.useState(true);
   const [tripStatus, setTripStatus] = React.useState<TripStatus>("OnTrip");
+  const [showInternalTripDetail, setShowInternalTripDetail] =
+    React.useState(false);
 
   // NOTE: sekarang state pakai StaffRequestRow, bukan MgmtRow
   const [selectedRow, setSelectedRow] = React.useState<StaffRequestRow | null>(
@@ -237,6 +240,14 @@ export default function DashboardStaffTTA() {
         row={toMgmtRow(selectedRow)}
         onBack={() => setSelectedRow(null)}
         onNotifyEmployee={handleNotifyEmployee}
+      />
+    );
+  }
+  if (showInternalTripDetail) {
+    return (
+      <InternalTransportDetail
+        status={tripStatus}
+        onBack={() => setShowInternalTripDetail(false)}
       />
     );
   }
@@ -890,9 +901,7 @@ export default function DashboardStaffTTA() {
                   <div className="flex items-center justify-end gap-2">
                     <DetailsButton
                       label="Detail"
-                      onClick={() => {
-                        console.log("open detail internal trip");
-                      }}
+                      onClick={() => setShowInternalTripDetail(true)}
                     />
 
                     <button
@@ -902,9 +911,7 @@ export default function DashboardStaffTTA() {
                           ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
                           : "bg-indigo-600 text-white hover:bg-indigo-700"
                       }`}
-                      onClick={() =>
-                        setShowInternalTrip((prev) => !prev)
-                      }
+                      onClick={() => setShowInternalTrip((prev) => !prev)}
                     >
                       {showInternalTrip ? "Hide" : "Show"}
                     </button>
