@@ -8,7 +8,7 @@ export type User = {
 
 export const USERS: User[] = [
   { id: 'EMP-2025-001', username: 'staffTTA', password: 'staffTTA123', name: 'Staff TTA', role: 'staff_tta' },
-  { id: 'EMP-2025-034', username: 'karyawan',  password: 'karyawan123', name: 'Karyawan',  role: 'karyawan' },
+  { id: 'EMP-2025-034', username: 'karyawan',  password: 'karyawan123', name: 'Alice Key',  role: 'karyawan' },
   { id: 'EMP-2025-050', username: 'Hod',       password: 'hod123',      name: 'Head of Department', role: 'hod' },
   // { username: "Hod", password: "hod123", name: "Head of Department", role: "hod" },
 ];
