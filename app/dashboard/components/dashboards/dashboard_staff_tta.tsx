@@ -18,8 +18,11 @@ import {
   getStaffRequestManagementRows,
   getStaffRequestHistoryRows,
   persistStaffNotify,
+  processRequestToTravelConfirmation,
+  approvalDetailById,
   type StaffRequestRow,
   type StaffHistoryRow,
+  type ApprovalDetail,
 } from "@/app/dashboard/data/ttaMock";
 
 import StaffTravelRequestDetail, {
@@ -219,6 +222,16 @@ export default function DashboardStaffTTA() {
   const loss = 5_000_000;
   const usedNet = Math.max(0, used - refunded - loss);
   const remaining = Math.max(0, initial - (usedNet + refunded + loss));
+
+  const handleProcessRequest = (requestId: string, requestorName: string) => {
+    // Extract employee ID dari approval detail untuk penyimpanan yang lebih akurat
+    const detail = approvalDetailById[requestId] as ApprovalDetail | undefined;
+    const employeeId = detail?.employee?.id || requestorName; // fallback ke name jika id tidak ada
+    
+    processRequestToTravelConfirmation(requestId, employeeId);
+    setRequestManagementRows(getStaffRequestManagementRows());
+    setRequestHistoryRows(getStaffRequestHistoryRows());
+  };
 
   const handleNotifyEmployee = (payload: {
     id: string;
@@ -438,10 +451,21 @@ export default function DashboardStaffTTA() {
                     {r.priority ? <PriorityBadge level={r.priority} /> : "-"}
                   </td>
                   <td className="py-2">
-                    <DetailsButton
-                      label="Detail"
-                      onClick={() => setSelectedRow(r)}
-                    />
+                    <div className="flex items-center gap-2">
+                      <DetailsButton
+                        label="Detail"
+                        onClick={() => setSelectedRow(r)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleProcessRequest(r.id, r.requestor)
+                        }
+                        className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 transition"
+                      >
+                        Process
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

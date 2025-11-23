@@ -12,6 +12,7 @@ import {
   validateDepartureDate,
 } from "./scripts";
 import { getReplies, INIT_PROMPT } from "./scriptedchat";
+import { submitTravelRequestDraft } from "@/app/dashboard/data/ttaMock";
 
 const MAX_FILES = 3;
 const MAX_SIZE_MB = 5;
@@ -241,6 +242,28 @@ export default function ChatbotView({
     const addCost = parseMoney(lastExternalDraft?.cost);
     if (addCost > 0)
       setBudgetUsed((u) => Math.min(INITIAL_BUDGET, u + addCost));
+
+    // Submit to approval flow (create approval record for HOD)
+    try {
+      const authRaw = localStorage.getItem("authUser");
+      const authUser = authRaw ? JSON.parse(authRaw) : { name: "Anonymous" };
+      submitTravelRequestDraft(
+        {
+          destination: lastExternalDraft.destination,
+          departureDateISO: v.iso ?? new Date().toISOString(),
+          transportation: lastExternalDraft.transport,
+          estimatedCost: parseMoney(lastExternalDraft.cost),
+        },
+        {
+          name: authUser.name ?? authUser.username ?? "Anonymous",
+          id: authUser.id,
+          department: authUser.department,
+          position: authUser.position,
+        }
+      );
+    } catch (e) {
+      // ignore
+    }
 
     setLastExternalDraft(null);
     await askMainMenu(3000);

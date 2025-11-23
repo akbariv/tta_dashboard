@@ -31,7 +31,10 @@ import {
   approvalDetailById,
   loadDecisionStore,
   persistDecision,
+  processRequestToTravelConfirmation,
   DECISION_STORAGE_KEY,
+  loadHodNotifyStore,
+  HOD_NOTIFY_STORAGE_KEY,
   type ApprovalDetail,
   type Department,
   type PeriodKey,
@@ -396,6 +399,53 @@ export default function DashboardHOD() {
     React.useState(false);
   const router = useRouter();
 
+  // HOD notifications (new submissions targeted to HOD)
+  const [hodNotifications, setHodNotifications] = React.useState<
+    Array<{
+      id: string;
+      notifiedDateISO: string;
+      requestId: string;
+      requestor?: string;
+      bookingId?: string;
+    }>
+  >(() => {
+    try {
+      const s = loadHodNotifyStore();
+      return Object.entries(s).map(([id, rec]) => ({ id, ...rec }));
+    } catch (e) {
+      return [];
+    }
+  });
+
+  React.useEffect(() => {
+    function refresh() {
+      try {
+        const s = loadHodNotifyStore();
+        const arr = Object.entries(s)
+          .map(([id, rec]) => ({ id, ...rec }))
+          .sort((a, b) => new Date(b.notifiedDateISO).getTime() - new Date(a.notifiedDateISO).getTime());
+        setHodNotifications(arr);
+      } catch (e) {
+        setHodNotifications([]);
+      }
+    }
+
+    function handleStorage(e: StorageEvent) {
+      if (!e.key || e.key === HOD_NOTIFY_STORAGE_KEY) refresh();
+    }
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", handleStorage);
+      window.addEventListener("tta:hod-notify", refresh as EventListener);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("storage", handleStorage);
+        window.removeEventListener("tta:hod-notify", refresh as EventListener);
+      }
+    };
+  }, []);
+
  
 
   // Map UI -> tipe di mock
@@ -467,6 +517,13 @@ export default function DashboardHOD() {
     setApprovalHistoryRowsState(buildApprovalHistoryRows());
     // also rebuild pending rows from source to keep in sync
     setApprovalMgmtRowsState(buildMgmtRows(getPendingApprovals(APPROVAL_SRC)));
+    // create Travel Confirmation so Staff TTA can process this approved request
+    try {
+      // requestorId param is optional — processRequestToTravelConfirmation will derive from approval detail when available
+      processRequestToTravelConfirmation(id, "");
+    } catch (e) {
+      // ignore
+    }
   }
 
   // reject via confirm modal
@@ -519,15 +576,25 @@ export default function DashboardHOD() {
         "tta:decision",
         handleCustom as EventListenerOrEventListenerObject
       );
+      // when new approvals are created (e.g., chatbot submit), refresh lists
+      window.addEventListener(
+        "tta:approval-created",
+        handleCustom as EventListenerOrEventListenerObject
+      );
     }
     return () => {
       if (typeof window !== "undefined") {
         window.removeEventListener("storage", handleStorage);
-        if (handleCustom)
+        if (handleCustom) {
           window.removeEventListener(
             "tta:decision",
             handleCustom as EventListenerOrEventListenerObject
           );
+          window.removeEventListener(
+            "tta:approval-created",
+            handleCustom as EventListenerOrEventListenerObject
+          );
+        }
       }
     };
   }, []);
@@ -727,6 +794,34 @@ export default function DashboardHOD() {
           </select>
         </div>
       </div>
+
+      {/* HOD Notifications (new submissions) */}
+      {hodNotifications.length > 0 && (
+        <Card title={`${hodNotifications.length} New Submission${hodNotifications.length>1?"s":""}`}>
+          <div className="space-y-2">
+            {hodNotifications.slice(0, 5).map((n) => (
+              <div key={n.id} className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold">{n.requestor ?? "—"}</div>
+                  <div className="text-xs text-slate-500">{n.requestId} • {n.bookingId ?? "-"}</div>
+                </div>
+                <div className="text-xs text-slate-400">
+                  {new Date(n.notifiedDateISO).toLocaleString("id-ID", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short", year: "numeric" })}
+                </div>
+              </div>
+            ))}
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => router.push("/dashboard?section=approval")}
+                className="text-xs px-3 py-1 rounded bg-[#bdd5fd] text-[#1755b9]"
+              >
+                View all
+              </button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <Card title="Travel Request Approval">
@@ -1748,7 +1843,12 @@ export default function DashboardHOD() {
           Schedule Report
         </button>
         <button
-          onClick={() => console.log("Download Report")}
+          onClick={() => {
+            // navigate to API endpoint that serves the file for download
+            if (typeof window !== "undefined") {
+              window.location.href = "/api/download/report";
+            }
+          }}
           className="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-[#2563EB] shadow hover:bg-[#1D4ED8] transition"
         >
           Download Report
