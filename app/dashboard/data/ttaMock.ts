@@ -1488,3 +1488,129 @@ export function seedTravelConfirmationFromApprovals() {
     persistTravelConfirmation(row.id, travelConfirm);
   });
 }
+
+
+// ===== Reschedule helper untuk chatbot =====
+
+export type ReschedulePayload = {
+  employeeId: string;              
+  newDepartureDateISO: string;     
+  newDestination?: string;
+  newTransportation?: string;
+  newEstimatedCost?: number;
+};
+
+export function rescheduleLatestTravelForEmployee(
+  payload: ReschedulePayload
+): TravelApproval | null {
+  const {
+    employeeId,
+    newDepartureDateISO,
+    newDestination,
+    newTransportation,
+    newEstimatedCost,
+  } = payload;
+
+  const approvals = Object.values(APPROVAL_DETAILS).filter((d) => {
+    if (!d || d.kind !== "travel") return false;
+    const trav = d as TravelApproval;
+    const emp = trav.employee;
+    return (
+      emp.id === employeeId ||
+      emp.name === employeeId 
+    );
+  }) as TravelApproval[];
+
+  if (approvals.length === 0) return null;
+
+  approvals.sort((a, b) => {
+    const ta = new Date(a.approval.requestDateISO).getTime();
+    const tb = new Date(b.approval.requestDateISO).getTime();
+    return tb - ta; // terbaru di index 0
+  });
+
+  const latest = approvals[0];
+  const originalTravel = latest.travel;
+
+  const changeId = `CH-${latest.id}-${Date.now()}`;
+
+  const updatedEstimatedCost =
+    typeof newEstimatedCost === "number"
+      ? Math.round(newEstimatedCost)
+      : originalTravel.estimatedCost;
+
+  // ===== UPDATE HARGA OPTIONS BERDASARKAN ESTIMASI BARU =====
+  let updatedOptions = originalTravel.options;
+  if (
+    Array.isArray(originalTravel.options) &&
+    originalTravel.options.length > 0
+  ) {
+    // base lama = harga option pertama sebelum reschedule
+    const first = originalTravel.options[0];
+    const oldBase =
+      typeof first.price === "number" && first.price > 0 ? first.price : 0;
+
+    const newBase = updatedEstimatedCost ?? oldBase;
+
+    if (oldBase > 0 && newBase > 0) {
+      updatedOptions = originalTravel.options.map((opt, idx) => {
+        // pertahankan rasio harga terhadap option pertama
+        let ratio = 1;
+        if (typeof opt.price === "number" && oldBase > 0) {
+          ratio = opt.price / oldBase;
+        } else if (idx > 0) {
+          // fallback kalau data kurang lengkap
+          ratio = 1 + idx * 0.05;
+        }
+
+        return {
+          ...opt,
+          price: Math.round(newBase * ratio),
+        };
+      });
+    }
+  }
+
+  latest.travel = {
+    ...originalTravel,
+    changeId,
+    destination: newDestination ?? originalTravel.destination,
+    departureDateISO:
+      newDepartureDateISO ?? originalTravel.departureDateISO,
+    transportation: newTransportation ?? originalTravel.transportation,
+    estimatedCost: updatedEstimatedCost,
+    options: updatedOptions,
+  };
+
+  latest.approval = {
+    ...latest.approval,
+    status: "Pending",
+    decisionDateISO: undefined,
+    reason: undefined,
+    requestDateISO: new Date().toISOString(),
+  };
+
+  const baseRow = approvalManagement.find((r) => r.id === latest.id);
+  if (baseRow) {
+    baseRow.category = "Travel Request";
+    baseRow.bookingId = latest.travel.bookingId;
+    baseRow.requestor = latest.employee.name;
+    baseRow.department = latest.employee.department;
+    baseRow.dueInDays = 2;
+    baseRow.countdownBadge = "Approval due in 2 days";
+  }
+
+  try {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("tta:approval-updated", {
+          detail: { id: latest.id },
+        })
+      );
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  return latest;
+}

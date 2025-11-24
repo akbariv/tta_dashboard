@@ -12,7 +12,11 @@ import {
   validateDepartureDate,
 } from "./scripts";
 import { getReplies, INIT_PROMPT } from "./scriptedchat";
-import { submitTravelRequestDraft } from "@/app/dashboard/data/ttaMock";
+import {
+  submitTravelRequestDraft,
+  rescheduleLatestTravelForEmployee,
+  type ReschedulePayload,
+} from "@/app/dashboard/data/ttaMock";
 
 const MAX_FILES = 3;
 const MAX_SIZE_MB = 5;
@@ -360,25 +364,93 @@ export default function ChatbotView({
         return;
       }
 
-      const additional = parseMoney(parsed.cost);
-      if (additional > 0) {
-        setBudgetUsed((u) => Math.min(INITIAL_BUDGET, u + additional));
+      // Validasi tanggal baru (harus >= hari ini)
+      const v = validateDepartureDate(parsed.date, ">=today");
+      if (!v.ok) {
+        await pushBotReplies([`Status: Rejected | ${v.reason}`]);
+        return;
       }
 
-      const modeLabel =
-        rescheduleMode === "cancel" ? "cancellation" : "reschedule";
+      // Ambil user / employeeId dari authUser di localStorage
+      let employeeId = "Anonymous";
+      try {
+        const authRaw = localStorage.getItem("authUser");
+        if (authRaw) {
+          const authUser = JSON.parse(authRaw);
+          employeeId =
+            authUser.id || authUser.username || authUser.name || employeeId;
+        }
+      } catch {
+        // ignore, pakai default "Anonymous"
+      }
 
-      await pushBotReplies([
-        "Check the available budget limit ...",
-        `The ${modeLabel} request for ID ${
-          rescheduleId ?? "-"
-        } has been sent to your superior.`,
-      ]);
+      // Jika mode = cancel → untuk sementara hanya kirim informasi,
+      // (kalau nanti ada helper cancel khusus, tinggal disambungkan di sini)
+      if (rescheduleMode === "cancel") {
+        await pushBotReplies([
+          "Your cancellation request has been noted and will be handled by the Travel Team.",
+        ]);
 
+        setRescheduleStage("idle");
+        setRescheduleId(null);
+        setRescheduleMode(null);
+        await askMainMenu(3000);
+        return;
+      }
+
+      // Mode RESCHEDULE → panggil helper yang mengubah latest travel request
+      let botMessage = "";
+
+      try {
+        // pakai ReschedulePayload supaya type import-nya kepakai
+        const payload: ReschedulePayload = {
+          employeeId,
+          newDepartureDateISO: v.iso ?? new Date().toISOString(),
+          newDestination: parsed.destination,
+          newTransportation: parsed.transport,
+          newEstimatedCost: parseMoney(parsed.cost),
+        };
+
+        const updated = rescheduleLatestTravelForEmployee(payload);
+
+        if (!updated) {
+          botMessage =
+            "Sorry, we couldn't find an active travel request to reschedule under your account.";
+        } else {
+          // update budget lokal (kalau ada estimasi biaya baru)
+          const additional = parseMoney(parsed.cost);
+          if (additional > 0) {
+            setBudgetUsed((u) => Math.min(INITIAL_BUDGET, u + additional));
+          }
+
+          const depDate = new Date(
+            updated.travel.departureDateISO
+          ).toLocaleDateString("id-ID", {
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+          });
+
+          botMessage = [
+            "Your travel has been rescheduled ✅",
+            `• New Destination: ${updated.travel.destination}`,
+            `• New Departure Date: ${depDate}`,
+            `• Transportation: ${updated.travel.transportation}`,
+            "",
+            "Status has been reset to Pending and will require approval from your Head of Department.",
+          ].join("\n");
+        }
+      } catch (e) {
+        botMessage =
+          "An error occurred while processing your reschedule request. Please try again or contact the TTA team.";
+      }
+
+      await pushBotReplies([botMessage]);
+
+      // Reset state flow reschedule
       setRescheduleStage("idle");
       setRescheduleId(null);
       setRescheduleMode(null);
-
       await askMainMenu(3000);
       return;
     }

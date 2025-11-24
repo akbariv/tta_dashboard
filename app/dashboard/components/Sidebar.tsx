@@ -109,6 +109,19 @@ function ApprovalIcon() {
   );
 }
 
+
+function BlibliLogo() {
+  return (
+    <div className="h-[80px] flex items-center px-[24px] border-b border-[#E0E0E0]">
+      <img
+        src="/assets/blibli_dashboard.png" // ganti sesuai nama file-mu
+        alt="Blibli"
+        className="h-[40px] w-auto object-contain"
+      />
+    </div>
+  );
+}
+
 interface SidebarProps {
   activeMenu?: "dashboard" | "chatbot" | "approval" | "settings";
   onMenuClick?: (
@@ -118,27 +131,24 @@ interface SidebarProps {
 
 export function Sidebar({ activeMenu = "chatbot", onMenuClick }: SidebarProps) {
   return (
-    <div className="bg-white h-screen w-[240px] flex flex-col relative border-r border-[#E0E0E0]">
-      {/* Logo */}
-      <div className="h-[67px] flex items-center px-[35px]">
-        <img
-          alt="Logo"
-          className="h-[57px] w-[157px] object-contain"
-          src="/assets/logo.png"
-        />
-      </div>
+    <div className="bg-white h-screen w-[240px] flex flex-col border-r border-[#E0E0E0]">
+      {/* TOP LOGO */}
+      <BlibliLogo />
 
-      {/* Menu Items */}
-      <div className="flex-1 px-[6px] pt-[40px]">
+      {/* MENU */}
+      <div className="flex-1 px-[6px] pt-[24px]">
         {/* Dashboard */}
         <button
-          className={`w-full flex items-center gap-[12px] px-[37px] h-[51px] rounded-[6px] mb-[8px] transition-colors ${
+          className={`relative w-full flex items-center gap-[12px] px-[37px] h-[51px] rounded-[6px] mb-[8px] transition-colors ${
             activeMenu === "dashboard"
               ? "bg-[#0072ff] text-white"
               : "text-[#202224] hover:bg-gray-50"
           }`}
           onClick={() => onMenuClick?.("dashboard")}
         >
+          {activeMenu === "dashboard" && (
+            <div className="absolute left-0 top-0 bottom-0 w-[9px] bg-[#0072ff] rounded-r-[4px]" />
+          )}
           <div className="size-[22px] shrink-0">
             <HomeIcon />
           </div>
@@ -149,7 +159,7 @@ export function Sidebar({ activeMenu = "chatbot", onMenuClick }: SidebarProps) {
 
         {/* AI Chatbot */}
         <button
-          className={`w-full flex items-center gap-[12px] px-[37px] h-[51px] rounded-[6px] mb-[8px] transition-colors relative ${
+          className={`relative w-full flex items-center gap-[12px] px-[37px] h-[51px] rounded-[6px] mb-[8px] transition-colors ${
             activeMenu === "chatbot"
               ? "bg-[#0072ff] text-white"
               : "text-[#202224] hover:bg-gray-50"
@@ -166,6 +176,7 @@ export function Sidebar({ activeMenu = "chatbot", onMenuClick }: SidebarProps) {
             AI Chatbot
           </span>
         </button>
+
         {/* Approval */}
         <button
           className={`w-full flex items-center gap-[12px] px-[37px] h-[51px] rounded-[6px] mb-[8px] transition-colors ${
@@ -183,7 +194,7 @@ export function Sidebar({ activeMenu = "chatbot", onMenuClick }: SidebarProps) {
           </span>
         </button>
 
-          {/* Divider Line */}
+        {/* Divider */}
         <div className="h-[0.6px] bg-[#E0E0E0] mx-[6px] my-[8px]" />
 
         {/* Settings */}
@@ -217,7 +228,7 @@ export function Sidebar({ activeMenu = "chatbot", onMenuClick }: SidebarProps) {
         </button>
       </div>
 
-      {/* Footer Logo */}
+      {/* FOOTER LOGO */}
       <div className="h-[77px] flex items-center px-[35px]">
         <div className="flex items-center gap-[8px]">
           <img
