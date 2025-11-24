@@ -53,6 +53,7 @@ export default function ChatbotView({
   const [claimType, setClaimType] = React.useState<
     "hotel" | "transportation" | "others" | null
   >(null);
+  const [pendingClaimAmount, setPendingClaimAmount] = React.useState(0);
 
   // ===== Reschedule / Cancel flow =====
   type RescheduleStage = "idle" | "yesNo" | "askId" | "reviseDetails";
@@ -83,6 +84,7 @@ export default function ChatbotView({
     // reset state
     setClaimStage("idle");
     setClaimType(null);
+    setPendingClaimAmount(0);
 
     setRescheduleStage("idle");
     setRescheduleId(null);
@@ -331,8 +333,9 @@ export default function ChatbotView({
         return;
       }
 
-      const mode: "reschedule" | "cancel" =
-        /\bcancel|batal\b/i.test(text) ? "cancel" : "reschedule";
+      const mode: "reschedule" | "cancel" = /\bcancel|batal\b/i.test(text)
+        ? "cancel"
+        : "reschedule";
 
       setRescheduleId(id);
       setRescheduleMode(mode);
@@ -425,6 +428,7 @@ export default function ChatbotView({
       if (picked) {
         setClaimType(picked as any);
         setClaimStage("details");
+        setPendingClaimAmount(0); // optional tapi rapi
         await showClaimDetailsPrompt();
       } else {
         await showClaimTypePrompt();
@@ -434,21 +438,37 @@ export default function ChatbotView({
 
     // 7) CLAIM: tahap isi detail + validasi lampiran
     if (claimStage === "details") {
+      const amountFromText = parseMoney(text);
+      if (amountFromText > 0) {
+        setPendingClaimAmount(amountFromText);
+      }
+
+      const effectiveAmount =
+        amountFromText > 0 ? amountFromText : pendingClaimAmount;
+
+      if (effectiveAmount <= 0) {
+        await pushBotReplies([
+          "Please include reimbursement nominal (amount) in your message, e.g.:\nNominal: 1.500.000",
+        ]);
+        return;
+      }
+
       if (attSnapshot.length === 0) {
         await pushBotReplies([
           "Please upload document according to your reimbursement purpose such as receipt, bills, etc.",
         ]);
         return;
       }
-      const addNominal = parseMoney(text);
-      if (addNominal > 0)
-        setBudgetUsed((u) => Math.min(INITIAL_BUDGET, u + addNominal));
+
+      setBudgetUsed((u) => Math.min(INITIAL_BUDGET, u + effectiveAmount));
 
       await pushBotReplies([
         "Your submission has been sent ✅\nCurrent status: Awaiting approval from the Head of Department.\n\nYou will receive a notification once this claim has been approved or rejected.",
       ]);
+
       setClaimStage("idle");
       setClaimType(null);
+      setPendingClaimAmount(0);
       await askMainMenu(3000);
       return;
     }
