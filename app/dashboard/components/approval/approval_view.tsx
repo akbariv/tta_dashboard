@@ -14,26 +14,36 @@ import RejectConfirmModal from "@/app/dashboard/components/approval/reject_confi
 export function CountDownPill({
   targetISO,
   badge,
+  status,
 }: {
   targetISO: string;
   badge?: string;
+  status?: "Pending" | "Approved" | "Rejected";
 }) {
+  // If there's an explicit badge set (e.g. by Staff TTA), show it.
   if (badge)
     return (
       <span className="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-700">
         {badge}
       </span>
     );
+  // If the request is still pending HOD approval and no badge exists yet,
+  // show a waiting state instead of a countdown.
+  if (!badge && status === "Pending") {
+    return (
+      <span className="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-700">
+        Waiting for approval
+      </span>
+    );
+  }
+
+  // Fallback: compute relative countdown from targetISO
   const target = new Date(targetISO).getTime();
   const diff = target - Date.now();
   const hours = Math.ceil(diff / 3_600_000);
   const days = Math.ceil(diff / 86_400_000);
   const label =
-    hours <= 24
-      ? "24 hours left"
-      : days === 1
-      ? "1 day left"
-      : `${days} days left`;
+    hours <= 24 ? "24 hours left" : days === 1 ? "1 day left" : `${days} days left`;
   return (
     <span className="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-700">
       {label}
@@ -83,10 +93,13 @@ const sortByDeadlineAsc = (
 export default function ApprovalView({
   initialOpenId = null,
   onCloseDetail,
+  role,
 }: {
   initialOpenId?: string | null;
   onCloseDetail?: () => void;
+  role?: string;
 }) {
+  const isHod = (role ?? "").toLowerCase().includes("hod");
   const [data, setData] = React.useState<Row[]>([]);
   const [status, setStatus] = React.useState<"All" | Row["status"]>("All");
   const [search, setSearch] = React.useState("");
@@ -94,14 +107,39 @@ export default function ApprovalView({
   React.useEffect(() => setOpenId(initialOpenId ?? null), [initialOpenId]);
   React.useEffect(() => {
     const onDecision = (ev: Event) => {
-      const detail = (ev as CustomEvent).detail as { id?: string } | undefined;
+      // prefer event.detail when available (persistDecision sends CustomEvent with detail)
+      const detail = (ev as CustomEvent)?.detail as { id?: string } | undefined;
       const decidedId = detail?.id;
-      if (!decidedId) return;
-      setData((prev) => prev.filter((r) => r.id !== decidedId));
+      if (decidedId) {
+        setData((prev) => prev.filter((r) => r.id !== decidedId));
+        return;
+      }
+
+      // fallback: some codepaths or environments may emit the event without detail.
+      // In that case, read the persisted decisions store and remove any decided ids.
+      try {
+        const decided = loadDecisionStore();
+        setData((prev) => prev.filter((r) => !decided[r.id]));
+      } catch (e) {
+        // ignore
+      }
     };
     window.addEventListener("tta:decision", onDecision as EventListener);
-    return () =>
+
+    const onApprovalUpdated = (ev: Event) => {
+      // recompute rows from source when approval metadata changes (dueInDays/countdownBadge)
+      try {
+        const decided = loadDecisionStore();
+        const base = mapToRows();
+        const pendingOnly = base.filter((r) => !decided[r.id]);
+        setData(pendingOnly);
+      } catch (e) {}
+    };
+    window.addEventListener("tta:approval-updated", onApprovalUpdated as EventListener);
+    return () => {
       window.removeEventListener("tta:decision", onDecision as EventListener);
+      window.removeEventListener("tta:approval-updated", onApprovalUpdated as EventListener);
+    };
   }, []);
 
   // ---------- INIT: load sumber + apply persist (filter yg sudah diputus) ----------
@@ -180,6 +218,7 @@ export default function ApprovalView({
     return (
       <ApprovalDetailView
         row={selected}
+        isHod={isHod}
         onClose={() => {
           setOpenId(null);
           onCloseDetail?.(); // ← panggil callback untuk hapus ?id di URL
@@ -257,6 +296,7 @@ export default function ApprovalView({
                     <CountDownPill
                       targetISO={r.countdownISO}
                       badge={r.countdownBadge}
+                      status={r.status}
                     />
                   </td>
                   <td className="py-2">
@@ -267,18 +307,22 @@ export default function ApprovalView({
                       >
                         Detail
                       </button>
-                      <button
-                        onClick={() => doApprove(r.id)}
-                        className="px-3 py-1 text-xs rounded bg-[#3B82F6] text-white hover:bg-[#2563EB]"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => requestReject(r.id)}
-                        className="px-3 py-1 text-xs rounded bg-rose-100 text-rose-700 hover:bg-rose-200"
-                      >
-                        Reject
-                      </button>
+                      {isHod && r.status === "Pending" ? (
+                        <>
+                          <button
+                            onClick={() => doApprove(r.id)}
+                            className="px-3 py-1 text-xs rounded bg-[#3B82F6] text-white hover:bg-[#2563EB]"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => requestReject(r.id)}
+                            className="px-3 py-1 text-xs rounded bg-rose-100 text-rose-700 hover:bg-rose-200"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      ) : null}
                     </div>
                   </td>
                 </tr>

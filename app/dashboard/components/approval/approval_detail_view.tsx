@@ -29,6 +29,7 @@ type Props = {
   onClose: () => void;
   onApprove: (id: string) => void;
   onReject: (id: string, reason?: string) => void;
+  isHod?: boolean;
 };
 
 // ...imports & types tetap
@@ -202,6 +203,7 @@ export default function ApprovalDetailView(props: Props) {
         <ReimbursementRequest
           row={row}
           detail={claimDetail}
+          isHod={props.isHod}
           onClose={handleClose}
           onApprove={() => approveLocal()}
           onReject={() => setRejectModalOpen(true)}
@@ -226,6 +228,7 @@ export default function ApprovalDetailView(props: Props) {
       <TravelRequest
         row={row}
         detail={travelDetail}
+        isHod={props.isHod}
         onClose={handleClose}
         onApprove={() => approveLocal()}
         onReject={(id, reason) => {

@@ -16,6 +16,7 @@ import {
   loadTravelConfirmationStore,
   persistTravelConfirmation,
   type TravelConfirmationRecord,
+  approvalDetailById,
 } from "@/app/dashboard/data/ttaMock";
 
 type TravelConfirmationRow = TravelConfirmationRecord & {
@@ -33,10 +34,25 @@ export default function TravelConfirmationPage() {
   } | null>(null);
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState<
-    "All" | "Waiting User's Confirmation" | "Confirmed" | "Rejected"
+    | "All"
+    | "Waiting for approval"
+    | "Waiting User's Confirmation"
+    | "Confirmed"
+    | "Rejected"
   >("All");
   const [category, setCategory] = React.useState("All");
   const [rows, setRows] = React.useState<TravelConfirmationRow[]>([]);
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [selectedDetail, setSelectedDetail] = React.useState<any | null>(
+    null
+  );
+  const [selectedOptionIds, setSelectedOptionIds] = React.useState<
+    string[] | undefined
+  >(undefined);
+  const [selectedTravelConfirm, setSelectedTravelConfirm] = React.useState<
+    TravelConfirmationRecord | null
+  >(null);
+  const [localSelectedOptionId, setLocalSelectedOptionId] = React.useState<string | undefined>(undefined);
 
   // Load user from localStorage
   React.useEffect(() => {
@@ -109,6 +125,62 @@ export default function TravelConfirmationPage() {
     };
   }, [user?.id, user?.name]);
 
+  // open detail modal
+  const openDetail = (id: string) => {
+    setSelectedId(id);
+    try {
+      let det = (approvalDetailById as any)[id];
+      const store = loadTravelConfirmationStore();
+      const rec = store[id];
+
+      // If there's no approval detail (some programmatic submissions may not
+      // have been added to APPROVAL_DETAILS), try to build a minimal travel
+      // detail from the persisted TravelConfirmation record so the modal can
+      // still show useful information.
+      if (!det && rec) {
+        det = {
+          id,
+          kind: "travel",
+          employee: {
+            name: rec.requestor,
+            id: rec.requestorId ?? rec.requestor,
+            department: rec.department ?? "-",
+            position: "-",
+          },
+          travel: {
+            requestId: id,
+            bookingId: rec.bookingId ?? "-",
+            type: "Moda Eksternal",
+            destination: "-",
+            departureDateISO: rec.requestDateISO,
+            transportation: "-",
+            estimatedCost: 0,
+            options: [],
+          },
+          approval: {
+            requestDateISO: rec.requestDateISO,
+            deadlineISO: rec.processedDateISO,
+            status: rec.status === "Waiting for approval" ? "Pending" : (rec.status as any),
+          },
+        };
+      }
+
+  setSelectedDetail(det ?? null);
+      setSelectedOptionIds(rec?.selectedOptionIds);
+      setSelectedTravelConfirm(rec ?? null);
+      setLocalSelectedOptionId(rec?.selectedOptionIds?.[0]);
+    } catch {
+      setSelectedDetail(null);
+      setSelectedOptionIds(undefined);
+    }
+  };
+
+  const closeDetail = () => {
+    setSelectedId(null);
+    setSelectedDetail(null);
+    setSelectedOptionIds(undefined);
+  };
+
   // Handle confirm action
   const handleConfirm = (id: string) => {
     const store = loadTravelConfirmationStore();
@@ -130,6 +202,9 @@ export default function TravelConfirmationPage() {
             : r
         )
       );
+      // update modal state too
+      setSelectedTravelConfirm(store[id]);
+      setSelectedOptionIds(store[id].selectedOptionIds);
     }
   };
 
@@ -154,6 +229,8 @@ export default function TravelConfirmationPage() {
             : r
         )
       );
+      // update modal state too
+      setSelectedTravelConfirm(store[id]);
     }
   };
 
@@ -232,16 +309,11 @@ export default function TravelConfirmationPage() {
                     className="px-3 py-2 text-sm border rounded-lg"
                     value={status}
                     onChange={(e) =>
-                      setStatus(
-                        e.target.value as
-                          | "All"
-                          | "Waiting User's Confirmation"
-                          | "Confirmed"
-                          | "Rejected"
-                      )
+                      setStatus(e.target.value as any)
                     }
                   >
                     <option value="All">Status</option>
+                    <option value="Waiting for approval">Waiting for approval</option>
                     <option value="Waiting User's Confirmation">
                       Waiting Confirmation
                     </option>
@@ -290,6 +362,8 @@ export default function TravelConfirmationPage() {
                           >
                             {r.status === "Waiting User's Confirmation"
                               ? "Waiting Confirmation"
+                              : r.status === "Waiting for approval"
+                              ? "Waiting for approval"
                               : r.status}
                           </span>
                         </td>
@@ -311,16 +385,19 @@ export default function TravelConfirmationPage() {
                                 </button>
                               </>
                             )}
-                            {r.status === "Confirmed" && (
-                              <span className="text-xs text-emerald-700 font-semibold">
-                                ✓ Confirmed
-                              </span>
-                            )}
+                            {/* confirmed label intentionally removed from Action column; Details button remains */}
                             {r.status === "Rejected" && (
                               <span className="text-xs text-red-700 font-semibold">
                                 ✗ Rejected
                               </span>
                             )}
+                            <DetailsButton
+                              onClick={() => openDetail(r.id)}
+                              size="xs"
+                              className="ml-2"
+                            >
+                              Details
+                            </DetailsButton>
                           </div>
                         </td>
                       </tr>
@@ -339,6 +416,115 @@ export default function TravelConfirmationPage() {
                 </table>
               </div>
             </Card>
+            {/* Detail modal */}
+            {selectedId && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center">
+                <div
+                  className="absolute inset-0 bg-black/40"
+                  onClick={closeDetail}
+                />
+                <div className="relative w-[900px] max-w-full bg-white rounded-2xl shadow-lg p-6 z-10">
+                  <div className="flex justify-between items-start">
+                    <h2 className="text-lg font-semibold">Travel Confirmation Detail</h2>
+                    <button
+                      onClick={closeDetail}
+                      className="text-slate-500 hover:text-slate-700"
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  <div className="mt-4">
+                    {selectedDetail && selectedDetail.kind === "travel" ? (
+                      <div>
+                        <div className="text-sm text-slate-600">Destination: <strong className="text-slate-800">{selectedDetail.travel.destination}</strong></div>
+                        <div className="text-sm text-slate-600 mt-1">Departure: <strong className="text-slate-800">{new Date(selectedDetail.travel.departureDateISO).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })}</strong></div>
+
+                        <div className="mt-4">
+                          <h3 className="text-sm font-medium">Options</h3>
+                          <div className="mt-2 space-y-2">
+                            {(selectedDetail.travel.options ?? []).map((opt: any) => {
+                              const isSelected = (selectedTravelConfirm?.selectedOptionIds?.includes(opt.id)) || localSelectedOptionId === opt.id;
+                              // Only allow changing selection when status is Waiting User's Confirmation
+                              const showRadio = selectedTravelConfirm?.status === "Waiting User's Confirmation";
+                              return (
+                                <div key={opt.id} className="flex items-center justify-between border rounded p-3">
+                                  <div className="flex items-center gap-3">
+                                    {showRadio ? (
+                                      <input
+                                        type="radio"
+                                        name="travel-option"
+                                        checked={localSelectedOptionId === opt.id}
+                                        onChange={() => {
+                                          // persist single selection to travel confirmation store
+                                          try {
+                                            const store = loadTravelConfirmationStore();
+                                            const rec = store[selectedId as string];
+                                            if (rec) {
+                                              rec.selectedOptionIds = [opt.id];
+                                              persistTravelConfirmation(selectedId as string, rec);
+                                              setSelectedOptionIds(rec.selectedOptionIds);
+                                              setSelectedTravelConfirm(rec);
+                                              setLocalSelectedOptionId(opt.id);
+                                              // also update rows list state
+                                              setRows((prev) => prev.map((r) => r.id === rec.id ? { ...r, status: rec.status } : r));
+                                            }
+                                          } catch (e) {}
+                                        }}
+                                      />
+                                    ) : null}
+                                    <div>
+                                      <div className="font-medium">{opt.label} — {opt.className}</div>
+                                      <div className="text-xs text-slate-500">{opt.departureTime} → {opt.arrivalTime} • {opt.departureStation} → {opt.destinationStation}</div>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-sm font-semibold">{(opt.price ?? 0).toLocaleString("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 })}</div>
+                                    {isSelected ? (
+                                      <div className="mt-2 text-xs inline-block px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">Selected</div>
+                                    ) : (
+                                      <div className="mt-2 text-xs inline-block px-2 py-1 rounded-full bg-slate-100 text-slate-600">Not selected</div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-slate-500">No detail available for this confirmation.</div>
+                    )}
+                  </div>
+
+                  <div className="mt-6 flex justify-end gap-2">
+                    <button onClick={closeDetail} className="px-4 py-2 rounded border">Close</button>
+                    {selectedTravelConfirm?.status === "Waiting User's Confirmation" ? (
+                      <>
+                        <button
+                          onClick={() => {
+                            handleReject(selectedId as string);
+                            closeDetail();
+                          }}
+                          className="px-4 py-2 rounded bg-red-600 text-white"
+                        >
+                          Reject
+                        </button>
+                        <button
+                          onClick={() => {
+                            handleConfirm(selectedId as string);
+                            closeDetail();
+                          }}
+                          className="px-4 py-2 rounded bg-emerald-600 text-white"
+                        >
+                          Confirm
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

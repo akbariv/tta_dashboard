@@ -236,11 +236,27 @@ export default function DashboardStaffTTA() {
   const handleNotifyEmployee = (payload: {
     id: string;
     selectedOptionId: string | null;
+    // allow multiple
+    selectedOptionIds?: string[] | null;
   }) => {
-    persistStaffNotify(payload.id, {
-      notifiedDateISO: new Date().toISOString(),
-      selectedOptionId: payload.selectedOptionId,
-    });
+    // prefer combined helper that also updates Travel Confirmation
+    try {
+      // import persistStaffNotifyAndUpdateConfirmation lazily to avoid circular or unused import errors
+      const { persistStaffNotifyAndUpdateConfirmation } = require("@/app/dashboard/data/ttaMock");
+      persistStaffNotifyAndUpdateConfirmation(payload.id, {
+        notifiedDateISO: new Date().toISOString(),
+        selectedOptionId: payload.selectedOptionId,
+        selectedOptionIds: payload.selectedOptionIds ?? null,
+      });
+    } catch (e) {
+      // fallback to original persist
+      try {
+        persistStaffNotify(payload.id, {
+          notifiedDateISO: new Date().toISOString(),
+          selectedOptionId: payload.selectedOptionId,
+        });
+      } catch (er) {}
+    }
 
     setRequestManagementRows(getStaffRequestManagementRows());
     setRequestHistoryRows(getStaffRequestHistoryRows());
@@ -488,7 +504,10 @@ export default function DashboardStaffTTA() {
         title="Request History"
         right={<SearchInput placeholder="Search" size="sm" />}
         footer={
-          <button className="text-xs text-slate-600 hover:text-slate-900">
+          <button
+            onClick={() => router.push("/dashboard/requests")}
+            className="text-xs text-slate-600 hover:text-slate-900"
+          >
             More
           </button>
         }
@@ -534,12 +553,26 @@ export default function DashboardStaffTTA() {
                     </span>
                   </td>
                   <td className="py-2 text-center">
-                    <DetailsButton
-                      label="Detail"
-                      onClick={() => {
-                        // detail history
-                      }}
-                    />
+                      <DetailsButton
+                        label="Detail"
+                        onClick={() => {
+                          // build a StaffRequestRow-like object from history row and open detail
+                          const hist = r;
+                          const staffRow: StaffRequestRow = {
+                            id: hist.id,
+                            category: hist.category,
+                            requestor: hist.requestor,
+                            department: hist.department,
+                            requestDateISO: hist.requestDateISO,
+                            approvalDateISO: hist.approvalDateISO,
+                            approvalStatus:
+                              hist.status === "Waiting User's Confirmation"
+                                ? "Pending"
+                                : (hist.status as any),
+                          } as StaffRequestRow;
+                          setSelectedRow(staffRow as StaffRequestRow);
+                        }}
+                      />
                   </td>
                 </tr>
               ))}

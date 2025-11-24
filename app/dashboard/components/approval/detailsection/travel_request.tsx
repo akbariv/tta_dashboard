@@ -20,6 +20,7 @@ type Props = {
   onClose: () => void;
   onApprove: (id: string) => void;
   onReject: (id: string, reason?: string) => void;
+  isHod?: boolean;
 };
 
 type TravelWithChange = TravelApproval["travel"] & {
@@ -89,6 +90,7 @@ export default function TravelRequest({
   onClose,
   onApprove,
   onReject,
+  isHod,
 }: Props) {
   const travel = detail.travel as TravelWithChange;
 
@@ -260,8 +262,10 @@ export default function TravelRequest({
           </RowItem>
         </Section>
 
-        {/* Footer actions: sembunyikan kalau sudah non-pending */}
-        {isPending && (
+    {/* Footer actions: show approve/reject to HOD when the request is pending.
+    Previously this required a countdownBadge which hid controls for newly
+    created approvals; show buttons based on pending + isHod only. */}
+  {isPending && (isHod ?? false) && (
           <div className="mt-6 border-t border-slate-200 pt-4 flex justify-end gap-2">
             <button
               type="button"

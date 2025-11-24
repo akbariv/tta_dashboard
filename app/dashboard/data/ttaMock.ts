@@ -517,8 +517,6 @@ export function submitTravelRequestDraft(
     requestor: requester.name,
     bookingId,
     department: requester.department ?? "—",
-    dueInDays: 2,
-    countdownBadge: "Approval due in 2 days",
   };
 
   approvalManagement.unshift(row);
@@ -540,7 +538,29 @@ export function submitTravelRequestDraft(
       departureDateISO: payload.departureDateISO,
       transportation: payload.transportation,
       estimatedCost: Math.round(payload.estimatedCost),
-      options: [],
+      // generate two simple options so Staff TTA and employee detail pages have selectable options
+      options: [
+        {
+          id: `${id}-opt-1`,
+          label: "Option 1",
+          className: "Economy",
+          departureTime: new Date(payload.departureDateISO).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+          arrivalTime: new Date(new Date(payload.departureDateISO).getTime() + 60 * 60 * 1000).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+          departureStation: "Jakarta (Origin)",
+          destinationStation: "Destination",
+          price: Math.round(payload.estimatedCost),
+        },
+        {
+          id: `${id}-opt-2`,
+          label: "Option 2",
+          className: "Premium Economic",
+          departureTime: new Date(payload.departureDateISO).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+          arrivalTime: new Date(new Date(payload.departureDateISO).getTime() + 90 * 60 * 1000).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+          departureStation: "Jakarta (Origin)",
+          destinationStation: "Destination",
+          price: Math.round(payload.estimatedCost * 1.05),
+        },
+      ],
     },
     approval: {
       requestDateISO: new Date().toISOString(),
@@ -550,6 +570,10 @@ export function submitTravelRequestDraft(
   };
 
   (APPROVAL_DETAILS as any)[id] = detail;
+
+  try {
+    console.debug("[submitTravelRequestDraft] created", { id, bookingId, row, time: new Date().toISOString() });
+  } catch (e) {}
 
   try {
     // emit event so UI can react
@@ -564,6 +588,23 @@ export function submitTravelRequestDraft(
           requestor: requester.name,
           bookingId,
         });
+    } catch (e) {}
+    // also create a Travel Confirmation record for employee with status "Waiting for approval"
+    try {
+      if (typeof window !== "undefined") {
+        const travelConfirm = {
+          id,
+          category: "Travel Request",
+          requestor: requester.name,
+          requestorId: requester.id ?? requester.name,
+          department: requester.department ?? "—",
+          bookingId,
+          requestDateISO: new Date().toISOString(),
+          processedDateISO: new Date().toISOString(),
+          status: "Waiting for approval",
+        } as any;
+        persistTravelConfirmation(id, travelConfirm);
+      }
     } catch (e) {}
   } catch (e) {}
 
@@ -884,6 +925,11 @@ export function loadDecisionStore(): Record<string, DecisionRecord> {
 
 /** simpan/overwrite keputusan untuk 1 id */
 export function persistDecision(id: string, rec: DecisionRecord) {
+  // DEBUG: trace where decisions are persisted (helps diagnose unexpected hides)
+  try {
+    console.debug("[persistDecision]", { id, rec, time: new Date().toISOString(), stack: new Error().stack });
+  } catch (e) {}
+
   const store = loadDecisionStore();
   store[id] = rec;
   try {
@@ -964,7 +1010,9 @@ export const STAFF_NOTIFY_STORAGE_KEY = "tta_staff_notify_v1";
 
 export type StaffNotifyRecord = {
   notifiedDateISO: string;
+  // support multiple selected options from Staff TTA
   selectedOptionId?: string | null;
+  selectedOptionIds?: string[] | null;
 };
 
 export function loadStaffNotifyStore(): Record<string, StaffNotifyRecord> {
@@ -989,6 +1037,40 @@ export function persistStaffNotify(id: string, rec: StaffNotifyRecord) {
   } catch (e) {
     // ignore
   }
+}
+
+// Ensure staff notify also updates travel confirmation record (mark as waiting user's confirmation and attach selected options)
+export function persistStaffNotifyAndUpdateConfirmation(id: string, rec: StaffNotifyRecord) {
+  try {
+    console.debug("[persistStaffNotifyAndUpdateConfirmation]", { id, rec, time: new Date().toISOString(), stack: new Error().stack });
+  } catch (e) {}
+  persistStaffNotify(id, rec);
+  try {
+    const store = loadTravelConfirmationStore();
+    const existing = store[id];
+    const selectedIds = rec.selectedOptionIds ?? (rec.selectedOptionId ? [rec.selectedOptionId] : undefined);
+    if (existing) {
+      existing.status = "Waiting User's Confirmation";
+      if (selectedIds) existing.selectedOptionIds = selectedIds;
+      existing.processedDateISO = new Date().toISOString();
+      persistTravelConfirmation(id, existing);
+    } else {
+      // create minimal travel confirmation if missing
+      const newRec: TravelConfirmationRecord = {
+        id,
+        category: "Travel Request",
+        requestor: rec && (rec as any).requestor ? (rec as any).requestor : "—",
+        requestorId: (rec as any).requestorId ?? "—",
+        department: "—",
+        bookingId: "-",
+        requestDateISO: new Date().toISOString(),
+        processedDateISO: new Date().toISOString(),
+        status: "Waiting User's Confirmation",
+        selectedOptionIds: selectedIds,
+      };
+      persistTravelConfirmation(id, newRec);
+    }
+  } catch (e) {}
 }
 
 // ===== HOD notify store (notification for Head of Department) =====
@@ -1035,8 +1117,15 @@ export type TravelConfirmationRecord = {
   bookingId: string;
   requestDateISO: string;
   processedDateISO: string; // kapan Staff TTA memproses
-  status: "Waiting User's Confirmation" | "Confirmed" | "Rejected";
+  // can be waiting for approval (before HoD approval), waiting user's confirmation (after staff processed), confirmed, rejected
+  status:
+    | "Waiting for approval"
+    | "Waiting User's Confirmation"
+    | "Confirmed"
+    | "Rejected";
   confirmationDateISO?: string;
+  // selected options provided by Staff TTA
+  selectedOptionIds?: string[];
 };
 
 export function loadTravelConfirmationStore(): Record<string, TravelConfirmationRecord> {
@@ -1077,6 +1166,9 @@ export function getTravelConfirmationForEmployee(employeeId: string): TravelConf
  * Akan membuat Travel Confirmation record untuk employee
  */
 export function processRequestToTravelConfirmation(requestId: string, requestorId: string) {
+  try {
+    console.debug("[processRequestToTravelConfirmation] start", { requestId, requestorId, time: new Date().toISOString(), stack: new Error().stack });
+  } catch (e) {}
   const baseRow = approvalManagement.find((r) => r.id === requestId);
   const detail = approvalDetailById[requestId] as ApprovalDetail | undefined;
 
@@ -1085,10 +1177,32 @@ export function processRequestToTravelConfirmation(requestId: string, requestorI
     return;
   }
 
+  // When Staff TTA processes a request, set a visible approval countdown
+  // so the HOD approval list shows the "Approval due in X days" badge.
+  try {
+    baseRow.dueInDays = 2;
+    baseRow.countdownBadge = "Approval due in 2 days";
+  } catch (e) {}
+
   // Prefer a real employee id from approval detail when available
   const derivedRequestorId =
     (detail && (detail as any).employee && (detail as any).employee.id) ||
     requestorId;
+
+  // ensure approval detail deadline is synced
+  try {
+    if (detail && detail.approval) {
+      detail.approval.deadlineISO = addDays(2);
+    }
+  } catch (e) {}
+
+  // notify UI that approval data changed so HOD list can refresh
+  try {
+    if (typeof window !== "undefined")
+      window.dispatchEvent(
+        new CustomEvent("tta:approval-updated", { detail: { id: requestId } })
+      );
+  } catch (e) {}
 
   const travelConfirm: TravelConfirmationRecord = {
     id: requestId,
@@ -1105,6 +1219,10 @@ export function processRequestToTravelConfirmation(requestId: string, requestorI
   };
 
   persistTravelConfirmation(requestId, travelConfirm);
+  // Mark as notified in staff-notify store so it appears in Request History
+  try {
+    persistStaffNotify(requestId, { notifiedDateISO: new Date().toISOString() });
+  } catch (e) {}
 }
 
 // ===================== STAFF TTA SELECTOR =====================
@@ -1127,11 +1245,22 @@ export type StaffRequestRow = {
  */
 export function getStaffRequestManagementRows(): StaffRequestRow[] {
   const decided = loadDecisionStore();
-  const notified = loadStaffNotifyStore();
+  const travelConfirmStore = loadTravelConfirmationStore();
 
+  // Show rows that have been approved by HoD and are NOT yet processed into
+  // a travel confirmation (i.e., not present as Waiting User's Confirmation / Confirmed / Rejected).
   return approvalManagement
-    .filter((row) => decided[row.id]?.status === "Approved") 
-    .filter((row) => !notified[row.id]) 
+    .filter((row) => decided[row.id]?.status === "Approved")
+    .filter((row) => {
+      const tc = travelConfirmStore[row.id];
+      if (!tc) return true; // no travel confirmation -> still needs processing
+      // if travel confirmation exists and is in any post-processing state, hide from management
+      return !(
+        tc.status === "Waiting User's Confirmation" ||
+        tc.status === "Confirmed" ||
+        tc.status === "Rejected"
+      );
+    })
     .map((row) => {
       const rec = decided[row.id]!;
       const detail = approvalDetailById[row.id] as ApprovalDetail | undefined;
@@ -1139,7 +1268,6 @@ export function getStaffRequestManagementRows(): StaffRequestRow[] {
       const requestDateISO =
         detail?.approval?.requestDateISO ?? new Date().toISOString();
 
- 
       let priority: StaffRequestRow["priority"] = "Low";
       if (row.dueInHours && row.dueInHours <= 24) {
         priority = "High";

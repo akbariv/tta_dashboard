@@ -131,6 +131,7 @@ export default function DashboardPage() {
               <ApprovalView
                 initialOpenId={openIdParam ?? null}
                 onCloseDetail={() => goToSection("approval", { id: null })}
+                role={user.role}
               />
             ))}
 

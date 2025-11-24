@@ -20,6 +20,7 @@ type Props = {
   onClose: () => void;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
+  isHod?: boolean;
 };
 
 function Field({
@@ -162,6 +163,7 @@ export default function ReimbursementRequest({
   onClose,
   onApprove,
   onReject,
+  isHod,
 }: Props) {
   const total = React.useMemo(
     () => detail.claim.expenses.reduce((a, b) => a + (b.amount ?? 0), 0),
@@ -246,8 +248,8 @@ export default function ReimbursementRequest({
             </Field>
           </div>
 
-          {/* CTA */}
-          {detail.approval.status === "Pending" && (
+          {/* CTA: only show approve/reject when pending AND Staff TTA has processed the request (countdownBadge present) */}
+          {detail.approval.status === "Pending" && (row as any).countdownBadge && (isHod ?? false) && (
             <div className="pt-6 flex justify-end gap-2">
               <button
                 onClick={() => onApprove(row.id)}

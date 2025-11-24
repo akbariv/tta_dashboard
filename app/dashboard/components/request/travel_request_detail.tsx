@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   approvalDetailById,
   persistStaffNotify,
+  persistStaffNotifyAndUpdateConfirmation,
   type TravelApproval,
 } from "@/app/dashboard/data/ttaMock";
 import NotifyConfirmation from "./notify_confirmation";
@@ -126,8 +127,9 @@ export default function StaffTravelRequestDetail({
   const options = detail.travel.options ?? [];
 
   const [showOptions, setShowOptions] = React.useState(false);
-  const [selectedOptionId, setSelectedOptionId] = React.useState<string | null>(
-    () => options[0]?.id ?? null
+  // allow selecting multiple options (checkboxes)
+  const [selectedOptionIds, setSelectedOptionIds] = React.useState<string[]>(
+    () => (options.length > 0 ? [options[0].id] : [])
   );
   const [showNotifyModal, setShowNotifyModal] = React.useState(false);
 
@@ -153,13 +155,16 @@ export default function StaffTravelRequestDetail({
     if (onNotifyEmployee) {
       onNotifyEmployee({
         id: row.id,
-        selectedOptionId,
+        // pass selected ids array
+        selectedOptionId: selectedOptionIds.length > 0 ? selectedOptionIds[0] : null,
       });
     }
 
-    persistStaffNotify(row.id, {
+    // persist staff notify and update travel confirmation record
+    persistStaffNotifyAndUpdateConfirmation(row.id, {
       notifiedDateISO: new Date().toISOString(),
-      selectedOptionId, // dari onNotifyEmployee
+      selectedOptionId: selectedOptionIds[0] ?? null,
+      selectedOptionIds: selectedOptionIds.length > 0 ? selectedOptionIds : null,
     });
 
     // kembali ke dashboard / list
@@ -301,11 +306,17 @@ export default function StaffTravelRequestDetail({
                         <td className="py-2 text-center">
                           <label className="inline-flex items-center gap-2 text-xs text-slate-600">
                             <input
-                              type="radio"
-                              name="best-option"
+                              type="checkbox"
+                              name={`option-${opt.id}`}
                               className="h-3 w-3"
-                              checked={selectedOptionId === opt.id}
-                              onChange={() => setSelectedOptionId(opt.id)}
+                              checked={selectedOptionIds.includes(opt.id)}
+                              onChange={() => {
+                                setSelectedOptionIds((prev) =>
+                                  prev.includes(opt.id)
+                                    ? prev.filter((x) => x !== opt.id)
+                                    : [...prev, opt.id]
+                                );
+                              }}
                             />
                             <span>{opt.label}</span>
                           </label>
