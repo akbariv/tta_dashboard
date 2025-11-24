@@ -186,25 +186,62 @@ export default function DashboardStaffTTA() {
     setRequestHistoryRows(getStaffRequestHistoryRows());
   }, []);
 
-  React.useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.rec) return;
-      if (detail.rec.status === "Approved") {
-        setRequestManagementRows(getStaffRequestManagementRows());
-        setRequestHistoryRows(getStaffRequestHistoryRows());
-      }
-    };
+  // React.useEffect(() => {
+  //   const handler = (e: Event) => {
+  //     const detail = (e as CustomEvent).detail;
+  //     if (!detail?.rec) return;
+  //     if (detail.rec.status === "Approved") {
+  //       setRequestManagementRows(getStaffRequestManagementRows());
+  //       setRequestHistoryRows(getStaffRequestHistoryRows());
+  //     }
+  //   };
 
-    if (typeof window !== "undefined") {
-      window.addEventListener("tta:decision", handler as any);
+  //   if (typeof window !== "undefined") {
+  //     window.addEventListener("tta:decision", handler as any);
+  //   }
+  //   return () => {
+  //     if (typeof window !== "undefined") {
+  //       window.removeEventListener("tta:decision", handler as any);
+  //     }
+  //   };
+  // }, []);
+  React.useEffect(() => {
+  const refresh = () => {
+    setRequestManagementRows(getStaffRequestManagementRows());
+    setRequestHistoryRows(getStaffRequestHistoryRows());
+  };
+
+  const onDecision = (e: Event) => {
+    const detail = (e as CustomEvent).detail;
+    if (!detail?.rec) return;
+    if (detail.rec.status === "Approved") {
+      refresh();
     }
-    return () => {
-      if (typeof window !== "undefined") {
-        window.removeEventListener("tta:decision", handler as any);
-      }
-    };
-  }, []);
+  };
+
+  const onTravelConfirmation = () => {
+    // employee confirm / reject → history perlu update
+    refresh();
+  };
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("tta:decision", onDecision as any);
+    window.addEventListener(
+      "tta:travel-confirmation",
+      onTravelConfirmation as any
+    );
+  }
+  return () => {
+    if (typeof window !== "undefined") {
+      window.removeEventListener("tta:decision", onDecision as any);
+      window.removeEventListener(
+        "tta:travel-confirmation",
+        onTravelConfirmation as any
+      );
+    }
+  };
+}, []);
+
 
   // Budget sinkron (fallback 30jt / 20jt untuk demo)
   const [{ initial, used }, setBudget] = React.useState(
@@ -227,7 +264,7 @@ export default function DashboardStaffTTA() {
     // Extract employee ID dari approval detail untuk penyimpanan yang lebih akurat
     const detail = approvalDetailById[requestId] as ApprovalDetail | undefined;
     const employeeId = detail?.employee?.id || requestorName; // fallback ke name jika id tidak ada
-    
+
     processRequestToTravelConfirmation(requestId, employeeId);
     setRequestManagementRows(getStaffRequestManagementRows());
     setRequestHistoryRows(getStaffRequestHistoryRows());
@@ -242,7 +279,9 @@ export default function DashboardStaffTTA() {
     // prefer combined helper that also updates Travel Confirmation
     try {
       // import persistStaffNotifyAndUpdateConfirmation lazily to avoid circular or unused import errors
-      const { persistStaffNotifyAndUpdateConfirmation } = require("@/app/dashboard/data/ttaMock");
+      const {
+        persistStaffNotifyAndUpdateConfirmation,
+      } = require("@/app/dashboard/data/ttaMock");
       persistStaffNotifyAndUpdateConfirmation(payload.id, {
         notifiedDateISO: new Date().toISOString(),
         selectedOptionId: payload.selectedOptionId,
@@ -474,9 +513,7 @@ export default function DashboardStaffTTA() {
                       />
                       <button
                         type="button"
-                        onClick={() =>
-                          handleProcessRequest(r.id, r.requestor)
-                        }
+                        onClick={() => handleProcessRequest(r.id, r.requestor)}
                         className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 transition"
                       >
                         Process
@@ -553,26 +590,34 @@ export default function DashboardStaffTTA() {
                     </span>
                   </td>
                   <td className="py-2 text-center">
-                      <DetailsButton
-                        label="Detail"
-                        onClick={() => {
-                          // build a StaffRequestRow-like object from history row and open detail
-                          const hist = r;
-                          const staffRow: StaffRequestRow = {
-                            id: hist.id,
-                            category: hist.category,
-                            requestor: hist.requestor,
-                            department: hist.department,
-                            requestDateISO: hist.requestDateISO,
-                            approvalDateISO: hist.approvalDateISO,
-                            approvalStatus:
-                              hist.status === "Waiting User's Confirmation"
-                                ? "Pending"
-                                : (hist.status as any),
-                          } as StaffRequestRow;
-                          setSelectedRow(staffRow as StaffRequestRow);
-                        }}
-                      />
+                    <DetailsButton
+                      label="Detail"
+                      onClick={() => {
+                        const hist = r;
+
+                        let approvalStatus: StaffRequestRow["approvalStatus"] =
+                          "Pending";
+                        if (hist.status === "Waiting User's Confirmation") {
+                          approvalStatus = "Pending";
+                        } else if (hist.status === "Booked") {
+                          approvalStatus = "Approved";
+                        } else if (hist.status === "Rejected") {
+                          approvalStatus = "Rejected";
+                        }
+
+                        const staffRow: StaffRequestRow = {
+                          id: hist.id,
+                          category: hist.category,
+                          requestor: hist.requestor,
+                          department: hist.department,
+                          requestDateISO: hist.requestDateISO,
+                          approvalDateISO: hist.approvalDateISO,
+                          approvalStatus,
+                        };
+
+                        setSelectedRow(staffRow);
+                      }}
+                    />
                   </td>
                 </tr>
               ))}

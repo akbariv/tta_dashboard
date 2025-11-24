@@ -5,7 +5,9 @@ import {
   approvalDetailById,
   persistStaffNotify,
   persistStaffNotifyAndUpdateConfirmation,
+  loadTravelConfirmationStore,
   type TravelApproval,
+  type TravelConfirmationRecord,
 } from "@/app/dashboard/data/ttaMock";
 import NotifyConfirmation from "./notify_confirmation";
 
@@ -94,7 +96,30 @@ export default function StaffTravelRequestDetail({
   onBack,
   onNotifyEmployee,
 }: Props) {
+  const [travelConfirm, setTravelConfirm] =
+    React.useState<TravelConfirmationRecord | null>(null);
   const raw = approvalDetailById[row.id] as TravelApproval | undefined;
+
+  React.useEffect(() => {
+    const store = loadTravelConfirmationStore();
+    setTravelConfirm(store[row.id] ?? null);
+
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.id === row.id) {
+        setTravelConfirm(detail.rec as TravelConfirmationRecord);
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("tta:travel-confirmation", handler as any);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("tta:travel-confirmation", handler as any);
+      }
+    };
+  }, [row.id]);
 
   const detail: TravelApproval =
     raw && raw.kind === "travel"
@@ -156,7 +181,8 @@ export default function StaffTravelRequestDetail({
       onNotifyEmployee({
         id: row.id,
         // pass selected ids array
-        selectedOptionId: selectedOptionIds.length > 0 ? selectedOptionIds[0] : null,
+        selectedOptionId:
+          selectedOptionIds.length > 0 ? selectedOptionIds[0] : null,
       });
     }
 
@@ -164,12 +190,18 @@ export default function StaffTravelRequestDetail({
     persistStaffNotifyAndUpdateConfirmation(row.id, {
       notifiedDateISO: new Date().toISOString(),
       selectedOptionId: selectedOptionIds[0] ?? null,
-      selectedOptionIds: selectedOptionIds.length > 0 ? selectedOptionIds : null,
+      selectedOptionIds:
+        selectedOptionIds.length > 0 ? selectedOptionIds : null,
     });
 
     // kembali ke dashboard / list
     onBack();
   };
+  const isAlreadyProcessed =
+    !!travelConfirm &&
+    (travelConfirm.status === "Waiting User's Confirmation" ||
+      travelConfirm.status === "Confirmed" ||
+      travelConfirm.status === "Rejected");
 
   return (
     <div className="space-y-4">
@@ -330,22 +362,24 @@ export default function StaffTravelRequestDetail({
           </div>
         )}
 
-        <div className="mt-6 border-t border-slate-200 pt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={handleProcess}
-            className="px-4 py-1.5 text-sm rounded-full bg-[#3B82F6] text-white hover:bg-[#2563EB]"
-          >
-            Process
-          </button>
-          <button
-            type="button"
-            onClick={onBack}
-            className="px-4 py-1.5 text-sm rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200"
-          >
-            Cancel
-          </button>
-        </div>
+        {!isAlreadyProcessed && (
+          <div className="mt-6 border-t border-slate-200 pt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleProcess}
+              className="px-4 py-1.5 text-sm rounded-full bg-[#3B82F6] text-white hover:bg-[#2563EB]"
+            >
+              Process
+            </button>
+            <button
+              type="button"
+              onClick={onBack}
+              className="px-4 py-1.5 text-sm rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Popup konfirmasi notify employee */}

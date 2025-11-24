@@ -132,7 +132,7 @@ const requestTracker: ReqRow[] = [
 export default function DashboardKaryawan() {
   const router = useRouter();
   const [{ initial, used }, setBudget] = React.useState(readBudget());
-  
+
   // State untuk track user info (untuk employee ID di travel confirmation)
   const [userInfo, setUserInfo] = React.useState<{
     id?: string;
@@ -180,11 +180,6 @@ export default function DashboardKaryawan() {
     TravelConfirmationRecord[]
   >([]);
 
-  // Resolve employee id to use for lookup in travel confirmation store.
-  // Priority:
-  // 1. auth user .id (preferred)
-  // 2. try to find approval detail with matching employee.name → use that employee.id
-  // 3. fallback to auth user .name (backward compatibility)
   const employeeIdForLookup = React.useMemo(() => {
     if (!userInfo) return "Alicia Key";
     if (userInfo.id) return userInfo.id;
@@ -192,8 +187,11 @@ export default function DashboardKaryawan() {
     // try to find a matching approval detail where employee.name matches userInfo.name
     try {
       const entries = Object.values(approvalDetailById) as any[];
-      const found = entries.find((d) => d && d.employee && d.employee.name === userInfo.name);
-      if (found && found.employee && found.employee.id) return found.employee.id;
+      const found = entries.find(
+        (d) => d && d.employee && d.employee.name === userInfo.name
+      );
+      if (found && found.employee && found.employee.id)
+        return found.employee.id;
     } catch (e) {
       // ignore and fallback
     }
@@ -208,7 +206,8 @@ export default function DashboardKaryawan() {
 
   React.useEffect(() => {
     const handler = (e: Event) => {
-      const confirmations = getTravelConfirmationForEmployee(employeeIdForLookup);
+      const confirmations =
+        getTravelConfirmationForEmployee(employeeIdForLookup);
       setTravelConfirmations(confirmations);
     };
 
@@ -338,7 +337,7 @@ export default function DashboardKaryawan() {
         }
         right={<SearchInput placeholder="Search" size="sm" />}
         footer={
-          <button 
+          <button
             onClick={() => router.push("/dashboard/travel-confirmation")}
             className="text-xs text-slate-600 hover:text-slate-900"
           >
@@ -373,11 +372,17 @@ export default function DashboardKaryawan() {
                   </td>
                   <td className="py-2">
                     <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-700">
-                      {r.status}
+                      {r.status === "Confirmed" ? "Booked" : r.status}
                     </span>
                   </td>
                   <td className="py-2">
-                    <DetailsButton label="View Details" size="sm" />
+                    <DetailsButton
+                      label="View Details"
+                      size="sm"
+                      onClick={() =>
+                        router.push("/dashboard/travel-confirmation")
+                      }
+                    />
                   </td>
                 </tr>
               ))}
@@ -402,26 +407,22 @@ export default function DashboardKaryawan() {
           iconSrc="/icons/claim_card.svg"
           columns={claimCols}
           rows={claimTracker}
-          footer={
-            DetailsButton({
-              label: "Details",
-              onClick: () => router.push("/dashboard/claims"),
-              size: "sm",
-            })
-          }
+          footer={DetailsButton({
+            label: "Details",
+            onClick: () => router.push("/dashboard/claims"),
+            size: "sm",
+          })}
         />
         <DataTableCard
           title="Request Tracker"
           iconSrc="/icons/tracker_icons.svg"
           columns={reqCols}
           rows={requestTracker}
-          footer={
-             DetailsButton({
-              label: "Details",
-              onClick: () => router.push("/dashboard/requests"),
-              size: "sm",
-            })
-          }
+          footer={DetailsButton({
+            label: "Details",
+            onClick: () => router.push("/dashboard/requests"),
+            size: "sm",
+          })}
         />
       </div>
     </div>

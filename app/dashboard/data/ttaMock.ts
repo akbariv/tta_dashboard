@@ -22,7 +22,7 @@ export type StaffHistoryRow = {
   department: string;
   requestDateISO: string;
   approvalDateISO: string;
-  status: "Waiting User's Confirmation";
+  status: "Waiting User's Confirmation" | "Booked" | "Rejected";
 };
 
 export type TravelOption = {
@@ -501,7 +501,12 @@ export function submitTravelRequestDraft(
     estimatedCost: number;
     type?: "Moda Internal" | "Moda Eksternal";
   },
-  requester: { name: string; id?: string; department?: string; position?: string }
+  requester: {
+    name: string;
+    id?: string;
+    department?: string;
+    position?: string;
+  }
 ) {
   // create reasonably unique IDs
   const nextNumeric = Math.floor(100 + Math.random() * 900); // 3-digit
@@ -538,29 +543,86 @@ export function submitTravelRequestDraft(
       departureDateISO: payload.departureDateISO,
       transportation: payload.transportation,
       estimatedCost: Math.round(payload.estimatedCost),
-      // generate two simple options so Staff TTA and employee detail pages have selectable options
-      options: [
-        {
-          id: `${id}-opt-1`,
-          label: "Option 1",
-          className: "Economy",
-          departureTime: new Date(payload.departureDateISO).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-          arrivalTime: new Date(new Date(payload.departureDateISO).getTime() + 60 * 60 * 1000).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-          departureStation: "Jakarta (Origin)",
-          destinationStation: "Destination",
-          price: Math.round(payload.estimatedCost),
-        },
-        {
-          id: `${id}-opt-2`,
-          label: "Option 2",
-          className: "Premium Economic",
-          departureTime: new Date(payload.departureDateISO).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-          arrivalTime: new Date(new Date(payload.departureDateISO).getTime() + 90 * 60 * 1000).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-          departureStation: "Jakarta (Origin)",
-          destinationStation: "Destination",
-          price: Math.round(payload.estimatedCost * 1.05),
-        },
-      ],
+
+      // generate two options so Staff TTA and employee detail pages have selectable options
+      options: (() => {
+        const isWhoosh = (payload.transportation || "")
+          .toLowerCase()
+          .includes("whoosh");
+
+        // kalau whoosh: jam fixed 07.00–07.30 & 08.00–08.30
+        if (isWhoosh) {
+          const destStation =
+            payload.destination && payload.destination.trim().length > 0
+              ? `${payload.destination} (Whoosh Station)`
+              : "Padalarang (Whoosh Station)";
+
+          return [
+            {
+              id: `${id}-opt-1`,
+              label: "Option 1",
+              className: "Economy",
+              departureTime: "07.00",
+              arrivalTime: "07.30",
+              departureStation: "Jakarta (Halim)",
+              destinationStation: destStation,
+              price: Math.round(payload.estimatedCost),
+            },
+            {
+              id: `${id}-opt-2`,
+              label: "Option 2",
+              className: "Premium Economic",
+              departureTime: "08.00",
+              arrivalTime: "08.30",
+              departureStation: "Jakarta (Halim)",
+              destinationStation: destStation,
+              price: Math.round(payload.estimatedCost * 1.05),
+            },
+          ];
+        }
+
+        // default (non-whoosh): pakai jam dinamis + durasi 30 menit
+        const base = new Date(payload.departureDateISO);
+        const fmt = (d: Date) =>
+          d.toLocaleTimeString("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+
+        const depart1 = base;
+        const arrive1 = new Date(base.getTime() + 30 * 60 * 1000); // +30 menit
+
+        const depart2 = new Date(base.getTime() + 60 * 60 * 1000); // +1 jam dari depart1
+        const arrive2 = new Date(depart2.getTime() + 30 * 60 * 1000); // +30 menit
+
+        const destStation =
+          payload.destination && payload.destination.trim().length > 0
+            ? payload.destination
+            : "Destination";
+
+        return [
+          {
+            id: `${id}-opt-1`,
+            label: "Option 1",
+            className: "Economy",
+            departureTime: fmt(depart1),
+            arrivalTime: fmt(arrive1),
+            departureStation: "Jakarta (Origin)",
+            destinationStation: destStation,
+            price: Math.round(payload.estimatedCost),
+          },
+          {
+            id: `${id}-opt-2`,
+            label: "Option 2",
+            className: "Premium Economic",
+            departureTime: fmt(depart2),
+            arrivalTime: fmt(arrive2),
+            departureStation: "Jakarta (Origin)",
+            destinationStation: destStation,
+            price: Math.round(payload.estimatedCost * 1.05),
+          },
+        ];
+      })(),
     },
     approval: {
       requestDateISO: new Date().toISOString(),
@@ -572,13 +634,20 @@ export function submitTravelRequestDraft(
   (APPROVAL_DETAILS as any)[id] = detail;
 
   try {
-    console.debug("[submitTravelRequestDraft] created", { id, bookingId, row, time: new Date().toISOString() });
+    console.debug("[submitTravelRequestDraft] created", {
+      id,
+      bookingId,
+      row,
+      time: new Date().toISOString(),
+    });
   } catch (e) {}
 
   try {
     // emit event so UI can react
     if (typeof window !== "undefined")
-      window.dispatchEvent(new CustomEvent("tta:approval-created", { detail: { id, detail } }));
+      window.dispatchEvent(
+        new CustomEvent("tta:approval-created", { detail: { id, detail } })
+      );
     // also create a HOD notification so Head of Department receives an inbox item
     try {
       if (typeof window !== "undefined")
@@ -927,7 +996,12 @@ export function loadDecisionStore(): Record<string, DecisionRecord> {
 export function persistDecision(id: string, rec: DecisionRecord) {
   // DEBUG: trace where decisions are persisted (helps diagnose unexpected hides)
   try {
-    console.debug("[persistDecision]", { id, rec, time: new Date().toISOString(), stack: new Error().stack });
+    console.debug("[persistDecision]", {
+      id,
+      rec,
+      time: new Date().toISOString(),
+      stack: new Error().stack,
+    });
   } catch (e) {}
 
   const store = loadDecisionStore();
@@ -957,7 +1031,6 @@ export function resetAllDecisions() {
   localStorage.removeItem(DECISION_STORAGE_KEY);
   localStorage.removeItem(STAFF_NOTIFY_STORAGE_KEY);
 }
-
 
 /** override status dari base data dengan keputusan yang tersimpan */
 export function applyDecisionsToList<
@@ -1040,15 +1113,25 @@ export function persistStaffNotify(id: string, rec: StaffNotifyRecord) {
 }
 
 // Ensure staff notify also updates travel confirmation record (mark as waiting user's confirmation and attach selected options)
-export function persistStaffNotifyAndUpdateConfirmation(id: string, rec: StaffNotifyRecord) {
+export function persistStaffNotifyAndUpdateConfirmation(
+  id: string,
+  rec: StaffNotifyRecord
+) {
   try {
-    console.debug("[persistStaffNotifyAndUpdateConfirmation]", { id, rec, time: new Date().toISOString(), stack: new Error().stack });
+    console.debug("[persistStaffNotifyAndUpdateConfirmation]", {
+      id,
+      rec,
+      time: new Date().toISOString(),
+      stack: new Error().stack,
+    });
   } catch (e) {}
   persistStaffNotify(id, rec);
   try {
     const store = loadTravelConfirmationStore();
     const existing = store[id];
-    const selectedIds = rec.selectedOptionIds ?? (rec.selectedOptionId ? [rec.selectedOptionId] : undefined);
+    const selectedIds =
+      rec.selectedOptionIds ??
+      (rec.selectedOptionId ? [rec.selectedOptionId] : undefined);
     if (existing) {
       existing.status = "Waiting User's Confirmation";
       if (selectedIds) existing.selectedOptionIds = selectedIds;
@@ -1098,7 +1181,9 @@ export function persistHodNotify(id: string, rec: HodNotifyRecord) {
   try {
     localStorage.setItem(HOD_NOTIFY_STORAGE_KEY, JSON.stringify(store));
     try {
-      window.dispatchEvent(new CustomEvent("tta:hod-notify", { detail: { id, rec } }));
+      window.dispatchEvent(
+        new CustomEvent("tta:hod-notify", { detail: { id, rec } })
+      );
     } catch (e) {}
   } catch (e) {
     // ignore
@@ -1128,20 +1213,31 @@ export type TravelConfirmationRecord = {
   selectedOptionIds?: string[];
 };
 
-export function loadTravelConfirmationStore(): Record<string, TravelConfirmationRecord> {
+export function loadTravelConfirmationStore(): Record<
+  string,
+  TravelConfirmationRecord
+> {
   if (typeof window === "undefined") return {};
   try {
-    return JSON.parse(localStorage.getItem(TRAVEL_CONFIRMATION_STORAGE_KEY) ?? "{}");
+    return JSON.parse(
+      localStorage.getItem(TRAVEL_CONFIRMATION_STORAGE_KEY) ?? "{}"
+    );
   } catch {
     return {};
   }
 }
 
-export function persistTravelConfirmation(id: string, rec: TravelConfirmationRecord) {
+export function persistTravelConfirmation(
+  id: string,
+  rec: TravelConfirmationRecord
+) {
   const store = loadTravelConfirmationStore();
   store[id] = rec;
   try {
-    localStorage.setItem(TRAVEL_CONFIRMATION_STORAGE_KEY, JSON.stringify(store));
+    localStorage.setItem(
+      TRAVEL_CONFIRMATION_STORAGE_KEY,
+      JSON.stringify(store)
+    );
     try {
       window.dispatchEvent(
         new CustomEvent("tta:travel-confirmation", { detail: { id, rec } })
@@ -1152,12 +1248,13 @@ export function persistTravelConfirmation(id: string, rec: TravelConfirmationRec
   }
 }
 
-export function getTravelConfirmationForEmployee(employeeId: string): TravelConfirmationRecord[] {
+export function getTravelConfirmationForEmployee(
+  employeeId: string
+): TravelConfirmationRecord[] {
   const store = loadTravelConfirmationStore();
   // Match by exact ID atau by name (fallback)
-  return Object.values(store).filter((rec) => 
-    rec.requestorId === employeeId || 
-    rec.requestor === employeeId
+  return Object.values(store).filter(
+    (rec) => rec.requestorId === employeeId || rec.requestor === employeeId
   );
 }
 
@@ -1165,15 +1262,25 @@ export function getTravelConfirmationForEmployee(employeeId: string): TravelConf
  * Fungsi untuk Staff TTA memproses request
  * Akan membuat Travel Confirmation record untuk employee
  */
-export function processRequestToTravelConfirmation(requestId: string, requestorId: string) {
+export function processRequestToTravelConfirmation(
+  requestId: string,
+  requestorId: string
+) {
   try {
-    console.debug("[processRequestToTravelConfirmation] start", { requestId, requestorId, time: new Date().toISOString(), stack: new Error().stack });
+    console.debug("[processRequestToTravelConfirmation] start", {
+      requestId,
+      requestorId,
+      time: new Date().toISOString(),
+      stack: new Error().stack,
+    });
   } catch (e) {}
   const baseRow = approvalManagement.find((r) => r.id === requestId);
   const detail = approvalDetailById[requestId] as ApprovalDetail | undefined;
 
   if (!baseRow) {
-    console.warn(`[processRequestToTravelConfirmation] Request ${requestId} not found`);
+    console.warn(
+      `[processRequestToTravelConfirmation] Request ${requestId} not found`
+    );
     return;
   }
 
@@ -1211,9 +1318,11 @@ export function processRequestToTravelConfirmation(requestId: string, requestorI
     requestorId: derivedRequestorId, // employee ID untuk routing
     department: baseRow.department,
     bookingId:
-      (detail && detail.kind === "travel" ? detail.travel.bookingId : baseRow.bookingId) ??
-      "-",
-    requestDateISO: detail?.approval?.requestDateISO ?? new Date().toISOString(),
+      (detail && detail.kind === "travel"
+        ? detail.travel.bookingId
+        : baseRow.bookingId) ?? "-",
+    requestDateISO:
+      detail?.approval?.requestDateISO ?? new Date().toISOString(),
     processedDateISO: new Date().toISOString(),
     status: "Waiting User's Confirmation",
   };
@@ -1221,7 +1330,9 @@ export function processRequestToTravelConfirmation(requestId: string, requestorI
   persistTravelConfirmation(requestId, travelConfirm);
   // Mark as notified in staff-notify store so it appears in Request History
   try {
-    persistStaffNotify(requestId, { notifiedDateISO: new Date().toISOString() });
+    persistStaffNotify(requestId, {
+      notifiedDateISO: new Date().toISOString(),
+    });
   } catch (e) {}
 }
 
@@ -1290,10 +1401,12 @@ export function getStaffRequestManagementRows(): StaffRequestRow[] {
 
 export function getStaffRequestHistoryRows(): StaffHistoryRow[] {
   const store = loadStaffNotifyStore();
+  const travelStore = loadTravelConfirmationStore();
 
   return Object.entries(store).map(([id, rec]) => {
     const baseRow = approvalManagement.find((r) => r.id === id);
     const detail = approvalDetailById[id] as ApprovalDetail | undefined;
+    const travelConfirm = travelStore[id];
 
     const requestDateISO =
       detail?.approval?.requestDateISO ?? new Date().toISOString();
@@ -1313,6 +1426,18 @@ export function getStaffRequestHistoryRows(): StaffHistoryRow[] {
     const department =
       baseRow?.department ?? detail?.employee.department ?? "—";
 
+    let status: StaffHistoryRow["status"] = "Waiting User's Confirmation";
+
+    if (travelConfirm) {
+      if (travelConfirm.status === "Confirmed") {
+        status = "Booked";
+      } else if (travelConfirm.status === "Rejected") {
+        status = "Rejected";
+      } else {
+        status = "Waiting User's Confirmation";
+      }
+    }
+
     return {
       id,
       bookingId,
@@ -1321,7 +1446,7 @@ export function getStaffRequestHistoryRows(): StaffHistoryRow[] {
       department,
       requestDateISO,
       approvalDateISO: rec.notifiedDateISO,
-      status: "Waiting User's Confirmation",
+      status,
     };
   });
 }
@@ -1332,21 +1457,21 @@ export function getStaffRequestHistoryRows(): StaffHistoryRow[] {
  */
 export function seedTravelConfirmationFromApprovals() {
   if (typeof window === "undefined") return;
-  
+
   const store = loadTravelConfirmationStore();
-  
+
   // Filter hanya Travel Request dari approvalManagement
   const travelRequests = approvalManagement.filter(
     (row) => row.category === "Travel Request"
   );
-  
+
   travelRequests.forEach((row) => {
     // Jangan override jika sudah ada
     if (store[row.id]) return;
-    
+
     const detail = approvalDetailById[row.id] as ApprovalDetail | undefined;
     const employeeId = detail?.employee?.id || row.requestor;
-    
+
     const travelConfirm: TravelConfirmationRecord = {
       id: row.id,
       category: "Travel Request",
@@ -1354,12 +1479,12 @@ export function seedTravelConfirmationFromApprovals() {
       requestorId: employeeId,
       department: row.department,
       bookingId: row.bookingId,
-      requestDateISO: detail?.approval?.requestDateISO ?? new Date().toISOString(),
+      requestDateISO:
+        detail?.approval?.requestDateISO ?? new Date().toISOString(),
       processedDateISO: new Date().toISOString(),
       status: "Waiting User's Confirmation",
     };
-    
+
     persistTravelConfirmation(row.id, travelConfirm);
   });
 }
-
